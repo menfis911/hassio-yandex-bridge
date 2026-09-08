@@ -1,9 +1,22 @@
-ARG BUILD_FROM
-FROM ${BUILD_FROM}
+ARG BUILD_ARCH
+ARG BUILD_VERSION
 
-WORKDIR /app
+FROM ghcr.io/home-assistant/base:3.24
+
+ARG BUILD_ARCH
+ARG BUILD_VERSION
+
+RUN apk add --no-cache ca-certificates python3
+
 COPY app/ /app/
 COPY run.sh /run.sh
-RUN chmod a+x /run.sh
+RUN chmod 0755 /run.sh
 
-CMD [ "/run.sh" ]
+LABEL \
+    io.hass.type="app" \
+    io.hass.arch="${BUILD_ARCH}" \
+    io.hass.version="${BUILD_VERSION}" \
+    org.opencontainers.image.title="Yandex HA Bridge" \
+    org.opencontainers.image.source="https://github.com/menfis911/hassio-yandex-bridge"
+
+CMD ["/run.sh"]
