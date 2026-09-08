@@ -1,21 +1,85 @@
 # Yandex HA Bridge
 
-Home Assistant add-on that reads Yandex Smart Home devices through the official Yandex Smart Home API.
+Аддон для Home Assistant, который получает устройства Яндекс Умного дома через официальный API Яндекса.
 
-## Current version
+## Текущая версия
 
-**0.1.0 — read-only discovery**
+**0.1.1 — исправление API и русская локализация**
 
-The first version does not control the device. It validates OAuth access and discovers the Yandex device **YNDX-00019** from Home Assistant add-on logs.
+Аддон пока работает в режиме только чтения: проверяет OAuth-доступ, находит устройство `YNDX-00019` и получает его текущее состояние.
 
-## Security
+Управление устройством будет добавлено начиная с версии **0.2.0**.
 
-The OAuth token is configured locally in Home Assistant. It is never stored in this repository and must never be committed to GitHub.
+## Как это работает
 
-## Roadmap
+```text
+Alice / Яндекс Умный дом
+          │
+          │ устройство остаётся в Яндексе
+          ▼
+   API Яндекс Умного дома
+          │
+          ▼
+     Yandex HA Bridge
+          │
+          ▼
+     Home Assistant
+```
 
-- 0.1.0 — API authentication and YNDX-00019 discovery
-- 0.2.0 — device control
-- 0.3.0 — automatic Home Assistant `light` entity via MQTT Discovery
-- 0.4.0 — state synchronization
-- later — multiple devices and additional capabilities
+Лампа не удаляется из Яндекса и не переносится в Home Assistant. Аддон получает доступ к ней через официальный API.
+
+## Настройка
+
+В конфигурации аддона необходимо указать OAuth-токен Яндекса с правом `iot:view`.
+
+Параметр `device_id` можно оставить пустым — в этом случае аддон автоматически ищет устройство модели `YNDX-00019`.
+
+`poll_interval` задаёт интервал проверки состояния в секундах. Минимальное значение — 10 секунд.
+
+## Безопасность
+
+OAuth-токен хранится только в локальной конфигурации Home Assistant.
+
+Токен **никогда не должен добавляться в GitHub, README, CHANGELOG, Dockerfile или исходный код**.
+
+## Версионность
+
+История всех релизов хранится в `yandex_ha_bridge/CHANGELOG.md`.
+
+В каждом релизе номер версии изменяется в `config.yaml`, поэтому Home Assistant видит обновление аддона.
+
+### Текущая схема релизов
+
+- **0.1.x** — авторизация, обнаружение и чтение устройств.
+- **0.2.x** — управление устройствами.
+- **0.3.x** — сущности Home Assistant через MQTT Discovery.
+- **0.4.x** — синхронизация состояния.
+- **0.5.x+** — несколько устройств и расширенные возможности.
+
+## План развития
+
+### 0.1.1
+- Исправлена авторизация через официальный API Яндекса.
+- Добавлена русская локализация.
+- Улучшено логирование.
+- Сохранён режим только чтения.
+
+### 0.2.0
+- Включение и выключение.
+- Изменение яркости.
+- RGB.
+- Цветовая температура.
+
+### 0.3.0
+- Автоматическое создание сущности `light` в Home Assistant.
+- MQTT Discovery.
+
+### 0.4.0
+- Периодическая синхронизация состояния.
+- Обновление состояния после команд из Home Assistant.
+
+### Далее
+- Поддержка нескольких устройств.
+- Дополнительные типы устройств.
+- Более подробная диагностика.
+- Автоматическое восстановление соединения.
