@@ -74,8 +74,7 @@ class YandexConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     @staticmethod
-    @config_entries.callback
-    def async_get_options_flow(config_entry):
+    async def async_get_options_flow(config_entry):
         return YandexOptionsFlow(config_entry)
 
 
