@@ -6,6 +6,7 @@
   "issue_tracker": "https://github.com/menfis911/hassio-yandex-bridge/issues",
   "codeowners": ["@menfis911"],
   "config_flow": true,
+  "integration_type": "hub",
   "iot_class": "cloud_polling",
   "requirements": []
 }
