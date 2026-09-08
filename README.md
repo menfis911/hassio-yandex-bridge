@@ -4,7 +4,7 @@
 
 ## Текущая версия
 
-**0.3.2 — синхронизация версий и очистка старой идентичности**
+**0.3.3 — исправление загрузки custom integration и переводов Config Flow**
 
 Интеграция работает через Config Flow: OAuth-токен → получение списка устройств → выбор устройств → создание Config Entry в Home Assistant.
 
@@ -72,6 +72,12 @@ OAuth-токен хранится в конфигурации Home Assistant.
 Токен **никогда не должен добавляться в GitHub, README, CHANGELOG, Dockerfile или исходный код**.
 
 ## Версии
+
+### 0.3.3
+- Исправлена структура переводов custom integration: добавлены `translations/en.json` и `translations/ru.json`.
+- Удалён `strings.json`, который не должен использоваться custom integration.
+- Синхронизирована версия интеграции и App: 0.3.3.
+- Исправлена загрузка Config Flow в актуальном Home Assistant.
 
 ### 0.3.2
 - Синхронизированы версии App, custom integration и исходного кода.
