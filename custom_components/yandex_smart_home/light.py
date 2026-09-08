@@ -44,18 +44,22 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
         return (cap.get("state") or {}).get("value") if cap else None
 
     def _set_modes(self):
-        modes = {ColorMode.ONOFF}
-        if self._cap("devices.capabilities.range", "brightness"):
-            modes.add(ColorMode.BRIGHTNESS)
+        modes = set()
         color_cap = self._cap("devices.capabilities.color_setting")
         if color_cap:
             params = color_cap.get("parameters") or {}
-            if "temperature_k" in params.get("color_model", []) or self._state("devices.capabilities.color_setting", "temperature_k") is not None:
-                modes.add(ColorMode.COLOR_TEMP)
-            if "rgb" in params.get("color_model", []) or "hsv" in params.get("color_model", []) or self._state("devices.capabilities.color_setting", "hsv") is not None or self._state("devices.capabilities.color_setting", "rgb") is not None:
+            models = params.get("color_model") or []
+            if "rgb" in models or "hsv" in models or self._state("devices.capabilities.color_setting", "hsv") is not None or self._state("devices.capabilities.color_setting", "rgb") is not None:
                 modes.add(ColorMode.RGB)
+            if "temperature_k" in models or self._state("devices.capabilities.color_setting", "temperature_k") is not None:
+                modes.add(ColorMode.COLOR_TEMP)
+        if not modes:
+            if self._cap("devices.capabilities.range", "brightness"):
+                modes.add(ColorMode.BRIGHTNESS)
+            else:
+                modes.add(ColorMode.ONOFF)
         self._attr_supported_color_modes = modes
-        self._attr_color_mode = ColorMode.RGB if ColorMode.RGB in modes else (ColorMode.COLOR_TEMP if ColorMode.COLOR_TEMP in modes else (ColorMode.BRIGHTNESS if ColorMode.BRIGHTNESS in modes else ColorMode.ONOFF))
+        self._attr_color_mode = next(iter(modes))
 
     @property
     def is_on(self):
@@ -84,14 +88,12 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
 
     @property
     def min_color_temp_kelvin(self):
-        cap = self._cap("devices.capabilities.color_setting")
-        params = (cap or {}).get("parameters") or {}
+        params = (self._cap("devices.capabilities.color_setting") or {}).get("parameters") or {}
         return int(params.get("temperature_k_min", 2700))
 
     @property
     def max_color_temp_kelvin(self):
-        cap = self._cap("devices.capabilities.color_setting")
-        params = (cap or {}).get("parameters") or {}
+        params = (self._cap("devices.capabilities.color_setting") or {}).get("parameters") or {}
         return int(params.get("temperature_k_max", 6500))
 
     async def async_turn_on(self, **kwargs):
@@ -111,5 +113,4 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    entities = [YandexLight(coordinator, device_id, device) for device_id, device in coordinator.data.items() if device.get("type", "").startswith("devices.types.light") or any(c.get("type") == "devices.capabilities.on_off" for c in device.get("capabilities", []))]
-    async_add_entities(entities)
+    async_add_entities([YandexLight(coordinator, device_id, device) for device_id, device in coordinator.data.items() if device.get("type", "").startswith("devices.types.light") or any(c.get("type") == "devices.capabilities.on_off" for c in device.get("capabilities", []))])
