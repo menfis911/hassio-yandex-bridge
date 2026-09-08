@@ -28,7 +28,6 @@ class YandexConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 else:
                     self._token = token
                     self._devices = devices
-                    await api.async_close()
                     return await self.async_step_devices()
             except YandexApiError:
                 errors["base"] = "cannot_connect"
@@ -75,7 +74,8 @@ class YandexConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     @staticmethod
-    async def async_get_options_flow(config_entry):
+    @config_entries.callback
+    def async_get_options_flow(config_entry):
         return YandexOptionsFlow(config_entry)
 
 
@@ -104,6 +104,7 @@ class YandexOptionsFlow(config_entries.OptionsFlow):
             new_data = dict(self.config_entry.data)
             new_data[CONF_DEVICE_IDS] = list(user_input.get(CONF_DEVICE_IDS, []))
             self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
             return self.async_create_entry(title="", data={})
 
         current = list(self.config_entry.data.get(CONF_DEVICE_IDS, []))
