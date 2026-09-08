@@ -1,0 +1,11 @@
+{
+  "domain": "yandex_smart_home",
+  "name": "Yandex Smart Home",
+  "version": "0.3.0",
+  "documentation": "https://github.com/menfis911/hassio-yandex-bridge",
+  "issue_tracker": "https://github.com/menfis911/hassio-yandex-bridge/issues",
+  "codeowners": ["@menfis911"],
+  "config_flow": true,
+  "iot_class": "cloud_polling",
+  "requirements": []
+}
