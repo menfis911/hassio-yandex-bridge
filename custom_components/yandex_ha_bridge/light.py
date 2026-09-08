@@ -11,6 +11,7 @@ from homeassistant.components.light import (
     ColorMode,
     LightEntity,
 )
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
@@ -32,14 +33,18 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
         self.device = device
         self._attr_unique_id = f"{device_id}_light"
         self._attr_name = device.get("name", "Yandex light")
-        info = device.get("device_info") or {}
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, device_id)},
-            "name": self._attr_name,
-            "manufacturer": info.get("manufacturer"),
-            "model": info.get("model"),
-        }
         self._set_modes()
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        info = self.current.get("device_info") or {}
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.device_id)},
+            name=self.current.get("name") or self._attr_name,
+            manufacturer=info.get("manufacturer"),
+            model=info.get("model"),
+            serial_number=self.device_id,
+        )
 
     @property
     def current(self) -> dict[str, Any]:
@@ -66,8 +71,7 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
 
     def _color_models(self) -> set[str]:
         params = (self._cap(CAP_COLOR) or {}).get("parameters") or {}
-        models = params.get("color_model") or []
-        return {str(model) for model in models}
+        return {str(model) for model in (params.get("color_model") or [])}
 
     def _set_modes(self) -> None:
         modes: set[ColorMode] = set()
@@ -99,11 +103,7 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
             return ((value >> 16) & 255, (value >> 8) & 255, value & 255)
         hsv = self._state(CAP_COLOR, "hsv")
         if isinstance(hsv, dict):
-            r, g, b = colorsys.hsv_to_rgb(
-                float(hsv.get("h", 0)) / 360,
-                float(hsv.get("s", 0)) / 100,
-                float(hsv.get("v", 0)) / 100,
-            )
+            r, g, b = colorsys.hsv_to_rgb(float(hsv.get("h", 0)) / 360, float(hsv.get("s", 0)) / 100, float(hsv.get("v", 0)) / 100)
             return round(r * 255), round(g * 255), round(b * 255)
         return None
 
@@ -114,77 +114,41 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
 
     @property
     def min_color_temp_kelvin(self) -> int:
-        params = (self._cap(CAP_COLOR) or {}).get("parameters") or {}
-        return int(params.get("temperature_k_min", 2700))
+        return int(((self._cap(CAP_COLOR) or {}).get("parameters") or {}).get("temperature_k_min", 2700))
 
     @property
     def max_color_temp_kelvin(self) -> int:
-        params = (self._cap(CAP_COLOR) or {}).get("parameters") or {}
-        return int(params.get("temperature_k_max", 6500))
+        return int(((self._cap(CAP_COLOR) or {}).get("parameters") or {}).get("temperature_k_max", 6500))
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         actions: list[dict[str, Any]] = []
         if self._cap(CAP_ON_OFF, "on"):
             actions.append({"type": CAP_ON_OFF, "state": {"instance": "on", "value": True}})
-
         if ATTR_BRIGHTNESS in kwargs and self._cap(CAP_RANGE, "brightness"):
-            actions.append({
-                "type": CAP_RANGE,
-                "state": {
-                    "instance": "brightness",
-                    "value": max(1, min(100, round(kwargs[ATTR_BRIGHTNESS] * 100 / 255))),
-                },
-            })
-
+            actions.append({"type": CAP_RANGE, "state": {"instance": "brightness", "value": max(1, min(100, round(kwargs[ATTR_BRIGHTNESS] * 100 / 255)))}})
         models = self._color_models()
         if ATTR_RGB_COLOR in kwargs and self._cap(CAP_COLOR):
             r, g, b = kwargs[ATTR_RGB_COLOR]
             if "hsv" in models:
                 h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
-                actions.append({
-                    "type": CAP_COLOR,
-                    "state": {
-                        "instance": "hsv",
-                        "value": {
-                            "h": round(h * 360, 2),
-                            "s": round(s * 100, 2),
-                            "v": round(v * 100, 2),
-                        },
-                    },
-                })
+                actions.append({"type": CAP_COLOR, "state": {"instance": "hsv", "value": {"h": round(h * 360, 2), "s": round(s * 100, 2), "v": round(v * 100, 2)}}})
             elif "rgb" in models:
-                rgb = (int(r) << 16) | (int(g) << 8) | int(b)
-                actions.append({
-                    "type": CAP_COLOR,
-                    "state": {"instance": "rgb", "value": rgb},
-                })
-
+                actions.append({"type": CAP_COLOR, "state": {"instance": "rgb", "value": (int(r) << 16) | (int(g) << 8) | int(b)}})
         if ATTR_COLOR_TEMP_KELVIN in kwargs and "temperature_k" in models:
-            actions.append({
-                "type": CAP_COLOR,
-                "state": {
-                    "instance": "temperature_k",
-                    "value": int(kwargs[ATTR_COLOR_TEMP_KELVIN]),
-                },
-            })
-
+            actions.append({"type": CAP_COLOR, "state": {"instance": "temperature_k", "value": int(kwargs[ATTR_COLOR_TEMP_KELVIN])}})
         if actions:
             await self.coordinator.async_action(self.device_id, actions)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         if self._cap(CAP_ON_OFF, "on"):
-            await self.coordinator.async_action(
-                self.device_id,
-                [{"type": CAP_ON_OFF, "state": {"instance": "on", "value": False}}],
-            )
+            await self.coordinator.async_action(self.device_id, [{"type": CAP_ON_OFF, "state": {"instance": "on", "value": False}}])
 
 
 async def async_setup_entry(hass, entry, async_add_entities) -> None:
     """Set up Yandex light entities."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    entities = [
+    async_add_entities([
         YandexLight(coordinator, device_id, device)
         for device_id, device in coordinator.data.items()
         if device.get("type", "").startswith("devices.types.light")
-    ]
-    async_add_entities(entities)
+    ])
