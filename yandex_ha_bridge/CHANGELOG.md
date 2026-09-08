@@ -1,37 +1,47 @@
 # История изменений
 
+## 0.3.7 — 8 сентября 2026
+
+### Управление светом и совместимость
+- Исправлено использование актуального Home Assistant Light API.
+- Добавлены `ATTR_RGB_COLOR` и `ATTR_COLOR_TEMP_KELVIN` из `homeassistant.components.light`.
+- Команды управления теперь формируются только для реально доступных capabilities устройства.
+- Исправлено создание `light` для устройств: теперь платформа добавляет только устройства типа `devices.types.light`.
+- Усилена типизация и структура `light.py`.
+
+### CI и версии
+- Версия автоматически сверяется между `manifest.json`, App `config.yaml`, `bridge.py`, README и CHANGELOG.
+- Workflow больше не содержит жёстко заданный номер релиза.
+- Добавлены проверки актуальных Home Assistant Light API imports.
+
+### OAuth
+- Сохранено явное объяснение требования `iot:control` для `POST /v1.0/devices/actions`.
+- `HTTP 403` теперь должен рассматриваться как отсутствие права управления у OAuth-токена, если Яндекс отклоняет action-запрос.
+
 ## 0.3.6 — 8 сентября 2026
 
 ### Управление устройствами и OAuth
-- Исправлена диагностика `HTTP 403` при выполнении действий через Yandex Smart Home API.
-- Ошибки API теперь сохраняют HTTP status, текст ответа Яндекса и `request_id`, если он возвращён.
+- Улучшена диагностика `HTTP 403` при выполнении действий через Yandex Smart Home API.
+- Ошибки API сохраняют HTTP status, текст ответа Яндекса и `request_id`, если он возвращён.
 - Для `POST /v1.0/devices/actions` явно учитывается требуемое право OAuth `iot:control`.
 - Добавлен `User-Agent` интеграции к API-запросам.
-- В документации явно указано, что для управления нужен OAuth-токен с `iot:view` и `iot:control`.
-
-### Версии и CI
-- Синхронизированы версии App, custom integration и исходного кода: **0.3.6**.
-- README обновлён: текущей версией теперь является **0.3.6**, а не 0.3.0.
-- GitHub Actions дополнительно проверяет актуальность версии в README и CHANGELOG.
-- Сохранена проверка корректного импорта `ATTR_BRIGHTNESS` для актуального Home Assistant.
+- В документации указано, что для управления нужен OAuth-токен с `iot:view` и `iot:control`.
 
 ## 0.3.5 — 8 сентября 2026
 
 ### Исправление совместимости с Home Assistant
-- Исправлен импорт `ATTR_BRIGHTNESS` в `light.py`: актуальный Home Assistant предоставляет этот атрибут из `homeassistant.components.light`, а не из `homeassistant.const`.
-- Исправлена загрузка платформы `light`, из-за которой Config Entry `Yandex HA Bridge` не запускался после установки 0.3.4.
-- Проверена совместимость используемых light API с актуальным Home Assistant.
-- Синхронизированы версии App, custom integration и исходного кода: **0.3.5**.
-- Добавлена автоматическая CI-проверка критичного импорта.
+- Исправлен импорт `ATTR_BRIGHTNESS` в `light.py` из `homeassistant.components.light`.
+- Исправлена загрузка платформы `light`.
+- Добавлена CI-проверка критичного импорта.
 
 ## 0.3.4 — 8 сентября 2026
 
 ### Исправление запуска custom integration
 - Исправлена ошибка запуска интеграции в актуальном Home Assistant: `DataUpdateCoordinator` больше не использует недоступный `hass.logger`.
-- Для `DataUpdateCoordinator` используется стандартный module logger Python (`logging.getLogger(__name__)`).
-- Синхронизированы версии App, custom integration и исходного кода: **0.3.4**.
+- Для `DataUpdateCoordinator` используется стандартный module logger Python.
+- Синхронизированы версии App и custom integration.
 - Обновлена проверка версии в GitHub Actions.
-- После успешной validation, сборки `amd64` и `aarch64` и публикации multi-arch manifest автоматически создаются tag `v0.3.4` и GitHub Release.
+- После успешной validation, сборки `amd64` и `aarch64` и публикации multi-arch manifest автоматически создаются tag и GitHub Release.
 - Полная инструкция приведена в соответствие с фактической структурой проекта.
 
 ## 0.3.3 — 8 сентября 2026
@@ -39,14 +49,14 @@
 ### Home Assistant Integration
 - Исправлена структура переводов custom integration: добавлены `translations/en.json` и `translations/ru.json`.
 - Удалён устаревший `strings.json`.
-- Синхронизирована версия интеграции и App: **0.3.3**.
+- Синхронизирована версия интеграции и App.
 - Исправлена загрузка Config Flow в актуальном Home Assistant.
 
 ## 0.3.2 — 8 сентября 2026
 
 ### Синхронизация и исправления
-- Синхронизирована версия App, custom integration и исходного кода: **0.3.2**.
-- Исправлены оставшиеся ссылки на версию **0.3.0** в App.
+- Синхронизирована версия App, custom integration и исходного кода.
+- Исправлены оставшиеся ссылки на версию 0.3.0 в App.
 - Исправлены тексты веб-панели.
 - Удалена устаревшая custom integration из `custom_components/yandex`.
 - Оставлена актуальная custom integration `custom_components/yandex_ha_bridge`.
@@ -58,7 +68,6 @@
 - Интеграция переименована в **Yandex HA Bridge**.
 - Используется уникальный домен `yandex_ha_bridge`.
 - Убрана конфликтующая идентичность `yandex_smart_home`.
-- Интеграция может работать одновременно со сторонней **Yandex Smart Home**.
 - Добавлены Config Flow и Options Flow.
 
 ### Свет
