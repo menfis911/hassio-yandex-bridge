@@ -1,5 +1,23 @@
 # История изменений
 
+## 0.3.4 — 8 сентября 2026
+
+### Исправление запуска custom integration
+- Исправлена ошибка запуска интеграции в актуальном Home Assistant: `DataUpdateCoordinator` больше не использует недоступный `hass.logger`.
+- Для `DataUpdateCoordinator` используется стандартный module logger Python (`logging.getLogger(__name__)`).
+- Синхронизированы версии App, custom integration и исходного кода: **0.3.4**.
+- Обновлена проверка версии в GitHub Actions.
+- После успешной validation, сборки `amd64` и `aarch64` и публикации multi-arch manifest автоматически создаются tag `v0.3.4` и GitHub Release.
+- Полная инструкция приведена в соответствие с фактической структурой проекта: актуальная integration использует `translations/en.json` и `translations/ru.json`; `strings.json` не используется.
+
+## 0.3.3 — 8 сентября 2026
+
+### Home Assistant Integration
+- Исправлена структура переводов custom integration: добавлены `translations/en.json` и `translations/ru.json`.
+- Удалён устаревший `strings.json`.
+- Синхронизирована версия интеграции и App: **0.3.3**.
+- Исправлена загрузка Config Flow в актуальном Home Assistant.
+
 ## 0.3.2 — 8 сентября 2026
 
 ### Синхронизация и исправления
