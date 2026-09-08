@@ -1,0 +1,34 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Yandex HA Bridge",
+        "description": "Введите OAuth-токен Яндекса с правом iot:view. Для управления устройствами токен также должен иметь iot:control.",
+        "data": {
+          "token": "OAuth-токен Яндекса"
+        }
+      },
+      "devices": {
+        "title": "Выбор устройств",
+        "description": "Выберите устройства Яндекса, которые должны появиться в Home Assistant.",
+        "data": {
+          "device_ids": "Устройства"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Не удалось получить устройства из Яндекса. Проверьте токен и подключение к интернету."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Устройства Yandex HA Bridge",
+        "description": "Измените список устройств, доступных Home Assistant.",
+        "data": {
+          "device_ids": "Устройства"
+        }
+      }
+    }
+  }
+}
