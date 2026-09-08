@@ -47,10 +47,16 @@ jobs:
           app_config = Path("yandex_ha_bridge/config.yaml").read_text(encoding="utf-8")
           bridge_source = Path("yandex_ha_bridge/app/bridge.py").read_text(encoding="utf-8")
 
-          app_version = re.search(r"^version:\s*([^\s]+)", app_config, re.MULTILINE).group(1)
-          bridge_version = re.search(r'^VERSION\s*=\s*[\"\']([^\"\']+)', bridge_source, re.MULTILINE).group(1)
-          api_version = re.search(r'^VERSION\s*=\s*[\"\']([^\"\']+)', api_source, re.MULTILINE).group(1)
-          const_version = re.search(r'^VERSION\s*=\s*[\"\']([^\"\']+)', const_source, re.MULTILINE).group(1)
+          app_version_match = re.search(r"^version:\s*([^\s]+)", app_config, re.MULTILINE)
+          bridge_version_match = re.search(r'^VERSION\s*=\s*[\"\']([^\"\']+)', bridge_source, re.MULTILINE)
+          api_version_match = re.search(r'^VERSION\s*=\s*[\"\']([^\"\']+)', api_source, re.MULTILINE)
+          const_version_match = re.search(r'^VERSION\s*=\s*[\"\']([^\"\']+)', const_source, re.MULTILINE)
+          assert app_version_match and bridge_version_match and api_version_match and const_version_match
+
+          app_version = app_version_match.group(1)
+          bridge_version = bridge_version_match.group(1)
+          api_version = api_version_match.group(1)
+          const_version = const_version_match.group(1)
           version = manifest["version"]
 
           assert manifest["domain"] == "yandex_ha_bridge"
@@ -76,10 +82,16 @@ jobs:
           assert "ColorMode" in light_source
 
           assert "config_entry=entry" in coordinator_source
-          assert "UpdateFailed(str(err))" in coordinator_source
+          assert "except YandexApiError as err:" in coordinator_source
+          assert "raise UpdateFailed(str(err)) from err" in coordinator_source
+          assert "async def async_action" in coordinator_source
+          assert "except YandexApiError:" in coordinator_source
+          assert "await self.async_request_refresh()" in coordinator_source
+
           assert "/v1.0/devices/actions" in api_source
           assert "iot:control" in api_source
           assert "if not actions:" in api_source
+          assert "Yandex-HABridge/" in api_source
 
           assert f"**{version}" in readme
           assert f"## {version}" in changelog
