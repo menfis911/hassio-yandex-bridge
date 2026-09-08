@@ -1,7 +1,7 @@
 name: Yandex HA Bridge
-version: 0.3.7
+version: 0.3.8
 slug: yandex_ha_bridge
-description: "Версия 0.3.7: исправление управления светом и усиленная проверка совместимости."
+description: "Yandex HA Bridge — добавляет выбранные устройства Яндекса в Home Assistant как отдельные устройства с управляемыми сущностями."
 url: https://github.com/menfis911/hassio-yandex-bridge
 startup: services
 boot: auto
