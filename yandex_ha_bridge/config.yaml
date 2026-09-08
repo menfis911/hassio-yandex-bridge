@@ -1,7 +1,7 @@
 name: Yandex HA Bridge
-version: 0.3.5
+version: 0.3.6
 slug: yandex_ha_bridge
-description: "Версия 0.3.5: исправление совместимости light platform с актуальным Home Assistant."
+description: "Версия 0.3.6: диагностика прав iot:control и улучшение обработки ошибок API."
 url: https://github.com/menfis911/hassio-yandex-bridge
 startup: services
 boot: auto
