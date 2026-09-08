@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LOG = logging.getLogger("yandex_ha_bridge")
 API = "https://api.iot.yandex.net"
-VERSION = "0.3.3"
+VERSION = "0.3.4"
 DATA_FILE = "/data/selected_devices.json"
 WEB_PORT = 8099
 
@@ -84,7 +84,7 @@ button{{margin-top:18px;padding:10px 18px;border:0;border-radius:8px;cursor:poin
 
 
 class WebHandler(BaseHTTPRequestHandler):
-    server_version = "YandexHABridge/0.3.3"
+    server_version = "YandexHABridge/0.3.4"
 
     def log_message(self, fmt, *args):
         LOG.debug("Web UI: " + fmt, *args)
