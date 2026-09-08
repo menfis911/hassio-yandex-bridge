@@ -1,0 +1,21 @@
+name: Yandex HA Bridge
+version: 0.1.0
+slug: yandex_ha_bridge
+description: Read-only bridge for Yandex Smart Home devices
+url: https://github.com/menfis911/hassio-yandex-bridge
+startup: services
+boot: auto
+init: false
+arch:
+  - amd64
+  - aarch64
+options:
+  yandex_oauth_token: ""
+  device_id: ""
+  poll_interval: 30
+  log_level: info
+schema:
+  yandex_oauth_token: password
+  device_id: str?
+  poll_interval: int
+  log_level: list(debug|info|warning|error)
