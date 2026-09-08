@@ -7,6 +7,7 @@ import urllib.request
 
 LOG = logging.getLogger("yandex_ha_bridge")
 API = "https://api.iot.yandex.net"
+VERSION = "0.1.1"
 
 
 def load_options():
@@ -17,7 +18,7 @@ def load_options():
 def api_get(path, token):
     req = urllib.request.Request(
         API + path,
-        headers={"Authorization": f"OAuth {token}", "Accept": "application/json"},
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
         method="GET",
     )
     with urllib.request.urlopen(req, timeout=20) as response:
@@ -38,38 +39,42 @@ def main():
     level = getattr(logging, str(options.get("log_level", "info")).upper(), logging.INFO)
     logging.basicConfig(level=level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
+    LOG.info("Yandex HA Bridge v%s запускается", VERSION)
+
     if not token:
-        LOG.error("Yandex OAuth token is not configured. Add it in the add-on Configuration tab.")
+        LOG.error("OAuth-токен Яндекса не настроен. Добавьте его в разделе «Конфигурация» аддона.")
         while True:
             time.sleep(300)
 
-    LOG.info("Yandex HA Bridge v0.1.0 started")
-    LOG.info("Read-only discovery mode; device control is intentionally disabled")
+    LOG.info("Режим только чтения: поиск устройства и получение его состояния")
 
     while True:
         try:
             data = api_get("/v1.0/user/info", token)
+            LOG.info("Соединение с API Яндекс Умного дома установлено")
             device = find_device(data, (options.get("device_id") or "").strip())
             if not device:
-                LOG.warning("YNDX-00019 was not found in Yandex Smart Home")
+                if (options.get("device_id") or "").strip():
+                    LOG.warning("Устройство с указанным device_id не найдено")
+                else:
+                    LOG.warning("Устройство модели YNDX-00019 не найдено в Яндекс Умном доме")
             else:
                 info = device.get("device_info", {})
-                LOG.info("Found device: id=%s name=%s model=%s", device.get("id"), device.get("name"), info.get("model"))
-                LOG.info("Device ID: %s", device.get("id"))
-                LOG.info("Name: %s", device.get("name"))
-                LOG.info("Model: %s", info.get("model"))
-                LOG.info("Type: %s", device.get("type"))
-                LOG.info("Capabilities: %s", [c.get("type") for c in device.get("capabilities", [])])
+                LOG.info("Найдено устройство: id=%s, имя=%s, модель=%s", device.get("id"), device.get("name"), info.get("model"))
+                LOG.info("Тип устройства: %s", device.get("type"))
+                LOG.info("Умения: %s", [c.get("type") for c in device.get("capabilities", [])])
                 state = api_get("/v1.0/devices/" + device["id"], token)
-                LOG.info("Current device state received successfully")
-                LOG.debug("State: %s", json.dumps(state, ensure_ascii=False))
+                LOG.info("Текущее состояние устройства успешно получено")
+                LOG.debug("Состояние: %s", json.dumps(state, ensure_ascii=False))
         except urllib.error.HTTPError as e:
             if e.code in (401, 403):
-                LOG.error("Yandex API authorization failed (HTTP %s). Check the OAuth token and scopes.", e.code)
+                LOG.error("Ошибка авторизации Яндекс API (HTTP %s). Проверьте OAuth-токен и права iot:view.", e.code)
             else:
-                LOG.error("Yandex API returned HTTP %s", e.code)
+                LOG.error("Яндекс API вернул HTTP %s", e.code)
+        except urllib.error.URLError as e:
+            LOG.error("Не удалось подключиться к API Яндекса: %s", e.reason)
         except Exception as e:
-            LOG.exception("Bridge cycle failed: %s", e)
+            LOG.exception("Ошибка цикла моста: %s", e)
         time.sleep(interval)
 
 
