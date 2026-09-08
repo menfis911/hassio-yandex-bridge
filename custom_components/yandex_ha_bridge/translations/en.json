@@ -4,16 +4,12 @@
       "user": {
         "title": "Yandex HA Bridge",
         "description": "Enter a Yandex OAuth token with iot:view permission. To control devices, the token must also have iot:control.",
-        "data": {
-          "token": "Yandex OAuth token"
-        }
+        "data": {"token": "Yandex OAuth token"}
       },
       "devices": {
         "title": "Select devices",
-        "description": "Select the Yandex devices that should be added to Home Assistant.",
-        "data": {
-          "device_ids": "Devices"
-        }
+        "description": "Select Yandex devices to add to Home Assistant. Each selected physical device is registered separately and gets its own entities.",
+        "data": {"device_ids": "Devices"}
       }
     },
     "error": {
@@ -24,10 +20,8 @@
     "step": {
       "init": {
         "title": "Yandex HA Bridge devices",
-        "description": "Change the list of devices available to Home Assistant.",
-        "data": {
-          "device_ids": "Devices"
-        }
+        "description": "Change the list of devices available to Home Assistant. Selected devices are registered separately in the Device Registry.",
+        "data": {"device_ids": "Devices"}
       }
     }
   }
