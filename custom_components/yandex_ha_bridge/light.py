@@ -33,18 +33,15 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
         self.device = device
         self._attr_unique_id = f"{device_id}_light"
         self._attr_name = device.get("name", "Yandex light")
-        self._set_modes()
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        info = self.current.get("device_info") or {}
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.device_id)},
-            name=self.current.get("name") or self._attr_name,
+        info = device.get("device_info") or {}
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, device_id)},
+            name=device.get("name") or self._attr_name,
             manufacturer=info.get("manufacturer"),
             model=info.get("model"),
-            serial_number=self.device_id,
+            serial_number=device_id,
         )
+        self._set_modes()
 
     @property
     def current(self) -> dict[str, Any]:
