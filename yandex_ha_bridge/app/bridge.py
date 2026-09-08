@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LOG = logging.getLogger("yandex_ha_bridge")
 API = "https://api.iot.yandex.net"
-VERSION = "0.3.6"
+VERSION = "0.3.7"
 DATA_FILE = "/data/selected_devices.json"
 WEB_PORT = 8099
 
@@ -42,7 +42,11 @@ def save_selected(device_ids):
 def api_get(path, token):
     req = urllib.request.Request(
         API + path,
-        headers={"Authorization": f"Bearer {token}", "Accept": "application/json", "User-Agent": f"Yandex-HABridge/{VERSION}"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+            "User-Agent": f"Yandex-HABridge/{VERSION}",
+        },
         method="GET",
     )
     with urllib.request.urlopen(req, timeout=20) as response:
