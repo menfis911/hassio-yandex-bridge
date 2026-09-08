@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LOG = logging.getLogger("yandex_ha_bridge")
 API = "https://api.iot.yandex.net"
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 DATA_FILE = "/data/selected_devices.json"
 WEB_PORT = 8099
 
@@ -77,13 +77,14 @@ main{{background:white;border-radius:14px;padding:24px;box-shadow:0 2px 12px #00
 button{{margin-top:18px;padding:10px 18px;border:0;border-radius:8px;cursor:pointer;font-size:15px}}.primary{{background:#111;color:white}}
 .hint{{color:#666}}.empty{{color:#a00}}
 </style></head><body><main>
-<h1>Yandex HA Bridge</h1><p class="hint">Выберите устройства, которые в дальнейшем будут добавлены в Home Assistant. Не выбранные устройства мост не публикует.</p>
-<form method="post" action="/save">{body}<button class="primary" type="submit">Сохранить выбор</button></form>
+<h1>Yandex HA Bridge</h1><p class="hint">Веб-панель оставлена для диагностики. Основной способ добавить устройства в Home Assistant: Настройки → Устройства и службы → Yandex Smart Home.</p>
+<p class="hint">Выбор ниже сохраняется локально в App и используется только для технической диагностики.</p>
+<form method="post" action="/save">{body}<button class="primary" type="submit">Сохранить диагностический выбор</button></form>
 </main></body></html>'''
 
 
 class WebHandler(BaseHTTPRequestHandler):
-    server_version = "YandexHABridge/0.2.0"
+    server_version = "YandexHABridge/0.3.0"
 
     def log_message(self, fmt, *args):
         LOG.debug("Web UI: " + fmt, *args)
@@ -122,7 +123,7 @@ class WebHandler(BaseHTTPRequestHandler):
             valid_ids = {str(d.get("id")) for d in devices}
             selected = [x for x in values if x in valid_ids]
             save_selected(selected)
-            LOG.info("Сохранён выбор устройств: %s", len(selected))
+            LOG.info("Сохранён диагностический выбор устройств: %s", len(selected))
             self.send_response(303)
             self.send_header("Location", "/")
             self.end_headers()
@@ -134,7 +135,7 @@ class WebHandler(BaseHTTPRequestHandler):
 def start_web(token):
     server = ThreadingHTTPServer(("0.0.0.0", WEB_PORT), WebHandler)
     server.token = token
-    LOG.info("Веб-интерфейс выбора устройств запущен на порту %s", WEB_PORT)
+    LOG.info("Веб-интерфейс диагностики запущен на порту %s", WEB_PORT)
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
 
@@ -148,12 +149,12 @@ def main():
     LOG.info("Yandex HA Bridge v%s запускается", VERSION)
 
     if not token:
-        LOG.error("OAuth-токен Яндекса не настроен. Добавьте его в разделе «Конфигурация» аддона.")
+        LOG.error("OAuth-токен Яндекса не настроен. Добавьте его в разделе «Конфигурация» приложения.")
         while True:
             time.sleep(300)
 
     start_web(token)
-    LOG.info("Режим выбора устройств: в Home Assistant будут публиковаться только выбранные устройства")
+    LOG.info("Основная интеграция устройств выполняется через Yandex Smart Home Integration")
 
     while True:
         try:
@@ -162,13 +163,13 @@ def main():
             devices = data.get("devices", [])
             selected = load_selected()
             if not selected:
-                LOG.info("Устройства ещё не выбраны. Откройте веб-интерфейс аддона и выберите нужные устройства.")
+                LOG.info("Диагностические устройства не выбраны. Основной выбор выполняется в интеграции Home Assistant.")
             else:
                 selected_devices = [d for d in devices if str(d.get("id")) in selected]
-                LOG.info("Выбрано устройств: %s из %s доступных", len(selected_devices), len(devices))
+                LOG.info("Диагностически выбрано устройств: %s из %s доступных", len(selected_devices), len(devices))
                 for device in selected_devices:
                     info = device.get("device_info", {}) or {}
-                    LOG.info("Выбрано: id=%s, имя=%s, модель=%s", device.get("id"), device.get("name"), info.get("model"))
+                    LOG.info("Проверка: id=%s, имя=%s, модель=%s", device.get("id"), device.get("name"), info.get("model"))
                     state = api_get("/v1.0/devices/" + str(device["id"]), token)
                     LOG.debug("Состояние %s: %s", device.get("name"), json.dumps(state, ensure_ascii=False))
         except urllib.error.HTTPError as e:
