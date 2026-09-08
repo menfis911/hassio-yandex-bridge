@@ -38,6 +38,7 @@ jobs:
           en = json.loads((root / "translations/en.json").read_text(encoding="utf-8"))
           ru = json.loads((root / "translations/ru.json").read_text(encoding="utf-8"))
           light_source = (root / "light.py").read_text(encoding="utf-8")
+          init_source = (root / "__init__.py").read_text(encoding="utf-8")
           api_source = (root / "api.py").read_text(encoding="utf-8")
           const_source = (root / "const.py").read_text(encoding="utf-8")
           readme = Path("README.md").read_text(encoding="utf-8")
@@ -66,11 +67,13 @@ jobs:
           assert "ATTR_COLOR_TEMP_KELVIN" in light_source
           assert "from homeassistant.const import ATTR_BRIGHTNESS" not in light_source
           assert "from homeassistant.helpers.entity import DeviceInfo" in light_source
-          assert "def device_info(self) -> DeviceInfo" in light_source
+          assert "self._attr_device_info = DeviceInfo(" in light_source
+          assert "identifiers={(DOMAIN, device_id)}" in light_source
+          assert "serial_number=device_id" in light_source
+          assert "device_registry" not in init_source
+          assert "async_get_or_create" not in init_source
           assert "ColorMode" in light_source
 
-          assert "device_registry" in (root / "__init__.py").read_text(encoding="utf-8")
-          assert "async_get_or_create" in (root / "__init__.py").read_text(encoding="utf-8")
           assert "/v1.0/devices/actions" in api_source
           assert "iot:control" in api_source
 
