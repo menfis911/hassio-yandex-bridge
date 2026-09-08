@@ -52,9 +52,11 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
         for cap in self._caps():
             if cap.get("type") != capability_type:
                 continue
+            if instance is None:
+                return cap
             state = cap.get("state") or {}
             params = cap.get("parameters") or {}
-            if instance is None or state.get("instance") == instance or params.get("instance") == instance:
+            if state.get("instance") == instance or params.get("instance") == instance:
                 return cap
         return None
 
@@ -62,16 +64,18 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
         cap = self._cap(capability_type, instance)
         return (cap.get("state") or {}).get("value") if cap else None
 
+    def _color_models(self) -> set[str]:
+        params = (self._cap(CAP_COLOR) or {}).get("parameters") or {}
+        models = params.get("color_model") or []
+        return {str(model) for model in models}
+
     def _set_modes(self) -> None:
         modes: set[ColorMode] = set()
-        color_cap = self._cap(CAP_COLOR)
-        if color_cap:
-            params = color_cap.get("parameters") or {}
-            models = params.get("color_model") or []
-            if "rgb" in models or "hsv" in models or self._state(CAP_COLOR, "hsv") is not None or self._state(CAP_COLOR, "rgb") is not None:
-                modes.add(ColorMode.RGB)
-            if "temperature_k" in models or self._state(CAP_COLOR, "temperature_k") is not None:
-                modes.add(ColorMode.COLOR_TEMP)
+        models = self._color_models()
+        if "rgb" in models or "hsv" in models or self._state(CAP_COLOR, "hsv") is not None or self._state(CAP_COLOR, "rgb") is not None:
+            modes.add(ColorMode.RGB)
+        if "temperature_k" in models or self._state(CAP_COLOR, "temperature_k") is not None:
+            modes.add(ColorMode.COLOR_TEMP)
         if self._cap(CAP_RANGE, "brightness"):
             modes.add(ColorMode.BRIGHTNESS)
         if not modes:
@@ -128,26 +132,40 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
                 "type": CAP_RANGE,
                 "state": {
                     "instance": "brightness",
-                    "value": round(kwargs[ATTR_BRIGHTNESS] * 100 / 255),
+                    "value": max(1, min(100, round(kwargs[ATTR_BRIGHTNESS] * 100 / 255))),
                 },
             })
 
+        models = self._color_models()
         if ATTR_RGB_COLOR in kwargs and self._cap(CAP_COLOR):
             r, g, b = kwargs[ATTR_RGB_COLOR]
-            h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
-            if self._cap(CAP_COLOR, "hsv") or "hsv" in ((self._cap(CAP_COLOR) or {}).get("parameters") or {}).get("color_model", []):
+            if "hsv" in models:
+                h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
                 actions.append({
                     "type": CAP_COLOR,
                     "state": {
                         "instance": "hsv",
-                        "value": {"h": round(h * 360, 2), "s": round(s * 100, 2), "v": round(v * 100, 2)},
+                        "value": {
+                            "h": round(h * 360, 2),
+                            "s": round(s * 100, 2),
+                            "v": round(v * 100, 2),
+                        },
                     },
                 })
+            elif "rgb" in models:
+                rgb = (int(r) << 16) | (int(g) << 8) | int(b)
+                actions.append({
+                    "type": CAP_COLOR,
+                    "state": {"instance": "rgb", "value": rgb},
+                })
 
-        if ATTR_COLOR_TEMP_KELVIN in kwargs and self._cap(CAP_COLOR, "temperature_k"):
+        if ATTR_COLOR_TEMP_KELVIN in kwargs and "temperature_k" in models:
             actions.append({
                 "type": CAP_COLOR,
-                "state": {"instance": "temperature_k", "value": int(kwargs[ATTR_COLOR_TEMP_KELVIN])},
+                "state": {
+                    "instance": "temperature_k",
+                    "value": int(kwargs[ATTR_COLOR_TEMP_KELVIN]),
+                },
             })
 
         if actions:
@@ -164,8 +182,9 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
 async def async_setup_entry(hass, entry, async_add_entities) -> None:
     """Set up Yandex light entities."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    entities = []
-    for device_id, device in coordinator.data.items():
-        if device.get("type", "").startswith("devices.types.light"):
-            entities.append(YandexLight(coordinator, device_id, device))
+    entities = [
+        YandexLight(coordinator, device_id, device)
+        for device_id, device in coordinator.data.items()
+        if device.get("type", "").startswith("devices.types.light")
+    ]
     async_add_entities(entities)
