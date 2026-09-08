@@ -1,7 +1,7 @@
 name: Yandex HA Bridge
-version: 0.3.1
+version: 0.3.2
 slug: yandex_ha_bridge
-description: "Версия 0.3.1: отдельная интеграция Yandex HA Bridge с уникальным доменом yandex_ha_bridge, Config Flow и выбором устройств."
+description: "Версия 0.3.2: Yandex HA Bridge с отдельным доменом yandex_ha_bridge и стандартной интеграцией Home Assistant."
 url: https://github.com/menfis911/hassio-yandex-bridge
 startup: services
 boot: auto
