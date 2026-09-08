@@ -12,6 +12,24 @@ env:
   IMAGE_NAME: hassio-yandex-bridge
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate Python and JSON
+        shell: bash
+        run: |
+          python -m compileall -q custom_components/yandex yandex_ha_bridge/app
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          json.loads(Path("custom_components/yandex/manifest.json").read_text())
+          json.loads(Path("custom_components/yandex/strings.json").read_text())
+          print("Custom integration syntax and JSON validation passed")
+          PY
+
   init:
     runs-on: ubuntu-latest
     permissions:
@@ -33,7 +51,7 @@ jobs:
           image-name: ${{ env.IMAGE_NAME }}
 
   build:
-    needs: init
+    needs: [validate, init]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
