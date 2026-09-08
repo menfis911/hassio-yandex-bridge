@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import json
 import logging
-import os
 import time
 import urllib.error
 import urllib.request
@@ -55,7 +54,7 @@ def main():
                 LOG.warning("YNDX-00019 was not found in Yandex Smart Home")
             else:
                 info = device.get("device_info", {})
-                LOG.info("Found device: id=%s name=%s model=%s")
+                LOG.info("Found device: id=%s name=%s model=%s", device.get("id"), device.get("name"), info.get("model"))
                 LOG.info("Device ID: %s", device.get("id"))
                 LOG.info("Name: %s", device.get("name"))
                 LOG.info("Model: %s", info.get("model"))
