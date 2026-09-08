@@ -1,7 +1,7 @@
 name: Yandex HA Bridge
-version: 0.1.0
+version: 0.1.1
 slug: yandex_ha_bridge
-description: Read-only bridge for Yandex Smart Home devices
+description: Мост между Яндекс Умным домом и Home Assistant
 url: https://github.com/menfis911/hassio-yandex-bridge
 startup: services
 boot: auto
