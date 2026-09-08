@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 import colorsys
+from typing import Any
 
 from homeassistant.components.light import ColorMode, LightEntity
 from homeassistant.config_entries import ConfigEntry
@@ -39,11 +39,18 @@ class YandexLight(CoordinatorEntity[YandexCoordinator], LightEntity):
     def device(self) -> dict[str, Any]:
         return self.coordinator.data.get(self._device_id, {})
 
+    def _handle_coordinator_update(self) -> None:
+        self._refresh_metadata()
+        super()._handle_coordinator_update()
+
     def _refresh_metadata(self) -> None:
         self._device = self.device
-        for capability in self._device.get("capabilities", []) or []:
-            if capability.get("type"):
-                self._capabilities[capability["type"]] = capability
+        self._capabilities = {
+            capability["type"]: capability
+            for capability in self._device.get("capabilities", []) or []
+            if capability.get("type")
+        }
+
         info = self._device.get("device_info", {}) or {}
         self._attr_device_info = {
             "identifiers": {(DOMAIN, self._device_id)},
@@ -52,6 +59,7 @@ class YandexLight(CoordinatorEntity[YandexCoordinator], LightEntity):
             "model": info.get("model"),
             "sw_version": info.get("sw_version"),
         }
+
         modes = set()
         color = self._capabilities.get("devices.capabilities.color_setting", {})
         params = color.get("parameters", {}) or {}
@@ -60,14 +68,29 @@ class YandexLight(CoordinatorEntity[YandexCoordinator], LightEntity):
         if params.get("temperature_k") is not None:
             modes.add(ColorMode.COLOR_TEMP)
         if not modes:
-            modes.add(ColorMode.BRIGHTNESS if "devices.capabilities.range" in self._capabilities else ColorMode.ONOFF)
+            modes.add(
+                ColorMode.BRIGHTNESS
+                if self._has_brightness_capability()
+                else ColorMode.ONOFF
+            )
         self._attr_supported_color_modes = modes
 
         temp = params.get("temperature_k") or {}
         if temp.get("min") is not None:
-            self._attr_min_color_temp_kelvin = temp["min"]
+            self._attr_min_color_temp_kelvin = int(temp["min"])
         if temp.get("max") is not None:
-            self._attr_max_color_temp_kelvin = temp["max"]
+            self._attr_max_color_temp_kelvin = int(temp["max"])
+
+    def _has_brightness_capability(self) -> bool:
+        capability = self._capabilities.get("devices.capabilities.range", {})
+        params = capability.get("parameters", {}) or {}
+        return params.get("instance") == "brightness" or any(
+            item.get("instance") == "brightness" for item in capability.get("parameters", {}).get("instances", []) or []
+        ) or any(
+            item.get("state", {}).get("instance") == "brightness"
+            for item in self._device.get("capabilities", []) or []
+            if item.get("type") == "devices.capabilities.range"
+        )
 
     @property
     def name(self) -> str:
@@ -77,16 +100,16 @@ class YandexLight(CoordinatorEntity[YandexCoordinator], LightEntity):
     def is_on(self) -> bool:
         for capability in self._device.get("capabilities", []) or []:
             if capability.get("type") == "devices.capabilities.on_off":
-                state = capability.get("state", {})
-                if isinstance(state.get("value"), bool):
-                    return state["value"]
+                value = (capability.get("state") or {}).get("value")
+                if isinstance(value, bool):
+                    return value
         return False
 
     def _get_range_brightness(self) -> int | None:
         for capability in self._device.get("capabilities", []) or []:
             if capability.get("type") != "devices.capabilities.range":
                 continue
-            state = capability.get("state", {})
+            state = capability.get("state", {}) or {}
             if state.get("instance") == "brightness":
                 value = state.get("value")
                 return int(value) if isinstance(value, (int, float)) else None
@@ -98,14 +121,14 @@ class YandexLight(CoordinatorEntity[YandexCoordinator], LightEntity):
         if value is not None:
             return round(max(0, min(100, value)) * 255 / 100)
         color = self._color_state()
-        if color and color[0] == "hsv":
-            return round(color[1]["v"] * 255 / 100)
+        if color and color[0] == "hsv" and isinstance(color[1], dict):
+            return round(color[1].get("v", 0) * 255 / 100)
         return None
 
     def _color_state(self):
         for capability in self._device.get("capabilities", []) or []:
             if capability.get("type") == "devices.capabilities.color_setting":
-                state = capability.get("state", {})
+                state = capability.get("state", {}) or {}
                 instance = state.get("instance")
                 if instance in ("rgb", "hsv", "temperature_k"):
                     return instance, state.get("value")
@@ -120,7 +143,11 @@ class YandexLight(CoordinatorEntity[YandexCoordinator], LightEntity):
         if instance == "rgb" and isinstance(value, int):
             return ((value >> 16) & 255, (value >> 8) & 255, value & 255)
         if instance == "hsv" and isinstance(value, dict):
-            r, g, b = colorsys.hsv_to_rgb(value.get("h", 0) / 360, value.get("s", 0) / 100, value.get("v", 0) / 100)
+            r, g, b = colorsys.hsv_to_rgb(
+                value.get("h", 0) / 360,
+                value.get("s", 0) / 100,
+                value.get("v", 0) / 100,
+            )
             return (round(r * 255), round(g * 255), round(b * 255))
         return None
 
@@ -139,20 +166,35 @@ class YandexLight(CoordinatorEntity[YandexCoordinator], LightEntity):
         await self.coordinator.async_request_refresh()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        actions = []
-        if kwargs.get("brightness") is not None:
-            actions.append({"type": "devices.capabilities.range", "state": {"instance": "brightness", "value": round(kwargs["brightness"] * 100 / 255)}})
+        actions: list[dict[str, Any]] = []
+        if kwargs.get("brightness") is not None and self._has_brightness_capability():
+            actions.append({
+                "type": "devices.capabilities.range",
+                "state": {"instance": "brightness", "value": round(kwargs["brightness"] * 100 / 255)},
+            })
         if kwargs.get("rgb_color") is not None:
             r, g, b = kwargs["rgb_color"]
             rgb = (int(r) << 16) | (int(g) << 8) | int(b)
-            actions.append({"type": "devices.capabilities.color_setting", "state": {"instance": "rgb", "value": rgb}})
+            actions.append({
+                "type": "devices.capabilities.color_setting",
+                "state": {"instance": "rgb", "value": rgb},
+            })
         if kwargs.get("color_temp_kelvin") is not None:
-            actions.append({"type": "devices.capabilities.color_setting", "state": {"instance": "temperature_k", "value": int(kwargs["color_temp_kelvin"])}})
-        actions.append({"type": "devices.capabilities.on_off", "state": {"instance": "on", "value": True}})
+            actions.append({
+                "type": "devices.capabilities.color_setting",
+                "state": {"instance": "temperature_k", "value": int(kwargs["color_temp_kelvin"])},
+            })
+        actions.append({
+            "type": "devices.capabilities.on_off",
+            "state": {"instance": "on", "value": True},
+        })
         await self._async_action(actions)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        await self._async_action([{"type": "devices.capabilities.on_off", "state": {"instance": "on", "value": False}}])
+        await self._async_action([{
+            "type": "devices.capabilities.on_off",
+            "state": {"instance": "on", "value": False},
+        }])
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
