@@ -1,7 +1,7 @@
 name: Yandex HA Bridge
-version: 0.2.0
+version: 0.2.1
 slug: yandex_ha_bridge
-description: Версия 0.2.0: добавлен интерфейс выбора устройств. В Home Assistant будут публиковаться только выбранные устройства.
+description: Версия 0.2.1: обновление метаданных релиза для корректного обнаружения обновления в Home Assistant.
 url: https://github.com/menfis911/hassio-yandex-bridge
 startup: services
 boot: auto
