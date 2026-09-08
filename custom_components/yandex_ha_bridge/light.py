@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import colorsys
-from homeassistant.components.light import ColorMode, LightEntity
-from homeassistant.const import ATTR_BRIGHTNESS
+
+from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
