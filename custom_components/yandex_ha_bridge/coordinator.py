@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import logging
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -9,13 +11,20 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api import YandexApi, YandexApiError
 from .const import CONF_DEVICE_IDS, CONF_TOKEN, DEFAULT_SCAN_INTERVAL, DOMAIN
 
+_LOGGER = logging.getLogger(__name__)
+
 
 class YandexDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict]]):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.entry = entry
         self.api = YandexApi(entry.data[CONF_TOKEN])
         self.device_ids = set(entry.data.get(CONF_DEVICE_IDS, []))
-        super().__init__(hass, hass.logger, name=DOMAIN, update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL))
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=DOMAIN,
+            update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
+        )
 
     async def _async_update_data(self) -> dict[str, dict]:
         try:
