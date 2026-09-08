@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LOG = logging.getLogger("yandex_ha_bridge")
 API = "https://api.iot.yandex.net"
-VERSION = "0.3.0"
+VERSION = "0.3.2"
 DATA_FILE = "/data/selected_devices.json"
 WEB_PORT = 8099
 
@@ -77,14 +77,14 @@ main{{background:white;border-radius:14px;padding:24px;box-shadow:0 2px 12px #00
 button{{margin-top:18px;padding:10px 18px;border:0;border-radius:8px;cursor:pointer;font-size:15px}}.primary{{background:#111;color:white}}
 .hint{{color:#666}}.empty{{color:#a00}}
 </style></head><body><main>
-<h1>Yandex HA Bridge</h1><p class="hint">Веб-панель оставлена для диагностики. Основной способ добавить устройства в Home Assistant: Настройки → Устройства и службы → Yandex Smart Home.</p>
-<p class="hint">Выбор ниже сохраняется локально в App и используется только для технической диагностики.</p>
+<h1>Yandex HA Bridge</h1><p class="hint">Веб-панель оставлена для диагностики. Основной способ добавить устройства: Настройки → Устройства и службы → Добавить интеграцию → Yandex HA Bridge.</p>
+<p class="hint">Выбор ниже сохраняется локально в App и используется для технической диагностики.</p>
 <form method="post" action="/save">{body}<button class="primary" type="submit">Сохранить диагностический выбор</button></form>
 </main></body></html>'''
 
 
 class WebHandler(BaseHTTPRequestHandler):
-    server_version = "YandexHABridge/0.3.0"
+    server_version = "YandexHABridge/0.3.2"
 
     def log_message(self, fmt, *args):
         LOG.debug("Web UI: " + fmt, *args)
@@ -154,7 +154,7 @@ def main():
             time.sleep(300)
 
     start_web(token)
-    LOG.info("Основная интеграция устройств выполняется через Yandex Smart Home Integration")
+    LOG.info("Основная работа с устройствами выполняется через интеграцию Yandex HA Bridge в Home Assistant")
 
     while True:
         try:
