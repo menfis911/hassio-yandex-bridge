@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: yandex-ha-bridge-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions: {}
 
 env:
@@ -54,19 +58,17 @@ jobs:
           assert (root / "config_flow.py").is_file()
           assert not (root / "strings.json").exists()
 
-          # Current HA exports light constants from homeassistant.components.light.
           assert "from homeassistant.components.light import" in light_source
           assert "ATTR_BRIGHTNESS" in light_source
           assert "ATTR_RGB_COLOR" in light_source
           assert "ATTR_COLOR_TEMP_KELVIN" in light_source
           assert "from homeassistant.const import ATTR_BRIGHTNESS" not in light_source
+          assert "ColorMode" in light_source
 
-          # The Yandex action endpoint requires the iot:control scope.
           assert "POST" in api_source
           assert "/v1.0/devices/actions" in api_source
           assert "iot:control" in api_source
 
-          # Release documentation must always follow the actual version.
           assert f"**{version}" in readme
           assert f"## {version}" in changelog
           assert "iot:control" in readme
