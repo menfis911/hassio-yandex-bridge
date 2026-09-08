@@ -1,7 +1,7 @@
 {
   "domain": "yandex_ha_bridge",
   "name": "Yandex HA Bridge",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "documentation": "https://github.com/menfis911/hassio-yandex-bridge",
   "issue_tracker": "https://github.com/menfis911/hassio-yandex-bridge/issues",
   "codeowners": ["@menfis911"],
