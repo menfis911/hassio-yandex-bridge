@@ -71,18 +71,39 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
         return {str(model) for model in (params.get("color_model") or [])}
 
     def _set_modes(self) -> None:
-        modes: set[ColorMode] = set()
+        """Set a Home Assistant-valid color mode combination."""
         models = self._color_models()
-        if "rgb" in models or "hsv" in models or self._state(CAP_COLOR, "hsv") is not None or self._state(CAP_COLOR, "rgb") is not None:
-            modes.add(ColorMode.RGB)
-        if "temperature_k" in models or self._state(CAP_COLOR, "temperature_k") is not None:
-            modes.add(ColorMode.COLOR_TEMP)
-        if self._cap(CAP_RANGE, "brightness"):
-            modes.add(ColorMode.BRIGHTNESS)
-        if not modes:
-            modes.add(ColorMode.ONOFF)
+        has_rgb = (
+            "rgb" in models
+            or "hsv" in models
+            or self._state(CAP_COLOR, "hsv") is not None
+            or self._state(CAP_COLOR, "rgb") is not None
+        )
+        has_color_temp = (
+            "temperature_k" in models
+            or self._state(CAP_COLOR, "temperature_k") is not None
+        )
+        has_brightness = self._cap(CAP_RANGE, "brightness") is not None
+
+        # Home Assistant color modes are mutually constrained. BRIGHTNESS
+        # cannot be combined with COLOR_TEMP; COLOR_TEMP and RGB already
+        # include brightness support implicitly.
+        if has_rgb:
+            modes: set[ColorMode] = {ColorMode.RGB}
+            if has_color_temp:
+                modes.add(ColorMode.COLOR_TEMP)
+            self._attr_color_mode = ColorMode.RGB
+        elif has_color_temp:
+            modes = {ColorMode.COLOR_TEMP}
+            self._attr_color_mode = ColorMode.COLOR_TEMP
+        elif has_brightness:
+            modes = {ColorMode.BRIGHTNESS}
+            self._attr_color_mode = ColorMode.BRIGHTNESS
+        else:
+            modes = {ColorMode.ONOFF}
+            self._attr_color_mode = ColorMode.ONOFF
+
         self._attr_supported_color_modes = modes
-        self._attr_color_mode = next(iter(modes))
 
     @property
     def is_on(self) -> bool:

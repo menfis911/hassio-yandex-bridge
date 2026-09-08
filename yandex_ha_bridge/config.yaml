@@ -1,5 +1,5 @@
 name: Yandex HA Bridge
-version: 0.3.10
+version: 0.3.11
 slug: yandex_ha_bridge
 description: "Yandex HA Bridge — добавляет выбранные устройства Яндекса в Home Assistant как отдельные устройства с управляемыми сущностями."
 url: https://github.com/menfis911/hassio-yandex-bridge

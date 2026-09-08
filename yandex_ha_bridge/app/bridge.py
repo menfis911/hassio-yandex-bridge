@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LOG = logging.getLogger("yandex_ha_bridge")
 API = "https://api.iot.yandex.net"
-VERSION = "0.3.10"
+VERSION = "0.3.11"
 DATA_FILE = "/data/selected_devices.json"
 WEB_PORT = 8099
 
