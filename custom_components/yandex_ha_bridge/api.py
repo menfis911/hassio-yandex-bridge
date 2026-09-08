@@ -8,7 +8,7 @@ import urllib.request
 from typing import Any
 
 API = "https://api.iot.yandex.net"
-VERSION = "0.3.9"
+VERSION = "0.3.10"
 
 
 class YandexApiError(Exception):
@@ -21,12 +21,19 @@ class YandexApiError(Exception):
 
 
 class YandexApi:
+    """Minimal async client for Yandex Smart Home API."""
+
     def __init__(self, token: str) -> None:
         self.token = token
 
-    async def _request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         def request() -> dict[str, Any]:
-            data = json.dumps(payload).encode() if payload is not None else None
+            data = json.dumps(payload, separators=(",", ":")).encode() if payload is not None else None
             req = urllib.request.Request(
                 API + path,
                 data=data,
@@ -52,8 +59,15 @@ class YandexApi:
                     details = body.get("message") or body.get("error_message") or ""
                 except json.JSONDecodeError:
                     details = raw.strip()
-                if err.code == 403:
-                    message = "Yandex API denied the request (HTTP 403). The OAuth token must have the iot:control permission for device actions."
+
+                if err.code == 403 and method == "POST" and path == "/v1.0/devices/actions":
+                    message = (
+                        "Yandex rejected the device action with HTTP 403. "
+                        "The OAuth token must include the iot:control permission. "
+                        "Reading devices only requires iot:view."
+                    )
+                elif err.code == 403:
+                    message = "Yandex API denied the request (HTTP 403). Check the OAuth token permissions."
                 else:
                     message = f"Yandex API HTTP {err.code}"
                 if details:
@@ -63,6 +77,7 @@ class YandexApi:
                 raise YandexApiError(message, status=err.code, request_id=request_id) from err
             except urllib.error.URLError as err:
                 raise YandexApiError(str(err.reason)) from err
+
         return await asyncio.to_thread(request)
 
     async def get_user_info(self) -> dict[str, Any]:
@@ -75,4 +90,10 @@ class YandexApi:
         return await self._request("GET", f"/v1.0/devices/{device_id}")
 
     async def actions(self, device_id: str, actions: list[dict[str, Any]]) -> dict[str, Any]:
-        return await self._request("POST", "/v1.0/devices/actions", {"devices": [{"id": device_id, "actions": actions}]})
+        if not actions:
+            return {}
+        return await self._request(
+            "POST",
+            "/v1.0/devices/actions",
+            {"devices": [{"id": device_id, "actions": actions}]},
+        )
