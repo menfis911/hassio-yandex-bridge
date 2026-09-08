@@ -1,5 +1,14 @@
 # История изменений
 
+## 0.3.5 — 8 сентября 2026
+
+### Исправление совместимости с Home Assistant
+- Исправлен импорт `ATTR_BRIGHTNESS` в `light.py`: актуальный Home Assistant предоставляет этот атрибут из `homeassistant.components.light`, а не из `homeassistant.const`.
+- Исправлена загрузка платформы `light`, из-за которой Config Entry `Yandex HA Bridge` не запускался после установки 0.3.4.
+- Проверена совместимость используемых light API с актуальным Home Assistant.
+- Синхронизированы версии App, custom integration и исходного кода: **0.3.5**.
+- Обновлена проверка версии в GitHub Actions.
+
 ## 0.3.4 — 8 сентября 2026
 
 ### Исправление запуска custom integration
