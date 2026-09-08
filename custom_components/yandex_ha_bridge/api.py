@@ -8,6 +8,7 @@ import urllib.request
 from typing import Any
 
 API = "https://api.iot.yandex.net"
+VERSION = "0.3.8"
 
 
 class YandexApiError(Exception):
@@ -33,7 +34,7 @@ class YandexApi:
                     "Authorization": f"Bearer {self.token}",
                     "Accept": "application/json",
                     "Content-Type": "application/json",
-                    "User-Agent": "Yandex-HABridge/0.3.6",
+                    "User-Agent": f"Yandex-HABridge/{VERSION}",
                 },
                 method=method,
             )
@@ -51,7 +52,6 @@ class YandexApi:
                     details = body.get("message") or body.get("error_message") or ""
                 except json.JSONDecodeError:
                     details = raw.strip()
-
                 if err.code == 403:
                     message = "Yandex API denied the request (HTTP 403). The OAuth token must have the iot:control permission for device actions."
                 else:
@@ -63,7 +63,6 @@ class YandexApi:
                 raise YandexApiError(message, status=err.code, request_id=request_id) from err
             except urllib.error.URLError as err:
                 raise YandexApiError(str(err.reason)) from err
-
         return await asyncio.to_thread(request)
 
     async def get_user_info(self) -> dict[str, Any]:
@@ -76,8 +75,4 @@ class YandexApi:
         return await self._request("GET", f"/v1.0/devices/{device_id}")
 
     async def actions(self, device_id: str, actions: list[dict[str, Any]]) -> dict[str, Any]:
-        return await self._request(
-            "POST",
-            "/v1.0/devices/actions",
-            {"devices": [{"id": device_id, "actions": actions}]},
-        )
+        return await self._request("POST", "/v1.0/devices/actions", {"devices": [{"id": device_id, "actions": actions}]})
