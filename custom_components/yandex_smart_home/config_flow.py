@@ -48,7 +48,8 @@ class YandexOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            self.hass.config_entries.async_update_entry(self.entry, data={**self.entry.data, CONF_DEVICE_IDS: user_input.get(CONF_DEVICE_IDS, [])})
+            return self.async_create_entry(data={})
         try:
             devices = await YandexApi(self.entry.data[CONF_TOKEN]).get_devices()
         except YandexApiError:
