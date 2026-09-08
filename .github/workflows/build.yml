@@ -39,6 +39,7 @@ jobs:
           ru = json.loads((root / "translations/ru.json").read_text(encoding="utf-8"))
           light_source = (root / "light.py").read_text(encoding="utf-8")
           init_source = (root / "__init__.py").read_text(encoding="utf-8")
+          coordinator_source = (root / "coordinator.py").read_text(encoding="utf-8")
           api_source = (root / "api.py").read_text(encoding="utf-8")
           const_source = (root / "const.py").read_text(encoding="utf-8")
           readme = Path("README.md").read_text(encoding="utf-8")
@@ -74,8 +75,11 @@ jobs:
           assert "async_get_or_create" not in init_source
           assert "ColorMode" in light_source
 
+          assert "config_entry=entry" in coordinator_source
+          assert "UpdateFailed(str(err))" in coordinator_source
           assert "/v1.0/devices/actions" in api_source
           assert "iot:control" in api_source
+          assert "if not actions:" in api_source
 
           assert f"**{version}" in readme
           assert f"## {version}" in changelog
