@@ -15,6 +15,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class YandexDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict]]):
+    """Coordinate Yandex device state and actions."""
+
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.entry = entry
         self.api = YandexApi(entry.data[CONF_TOKEN])
@@ -23,13 +25,18 @@ class YandexDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict]]):
             hass,
             _LOGGER,
             name=DOMAIN,
+            config_entry=entry,
             update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
         )
 
     async def _async_update_data(self) -> dict[str, dict]:
         try:
             devices = await self.api.get_devices()
-            selected = {str(d.get("id")): d for d in devices if str(d.get("id")) in self.device_ids}
+            selected = {
+                str(d.get("id")): d
+                for d in devices
+                if str(d.get("id")) in self.device_ids
+            }
             result: dict[str, dict] = {}
             for device_id in selected:
                 result[device_id] = await self.api.get_device(device_id)
@@ -38,8 +45,11 @@ class YandexDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict]]):
             raise UpdateFailed(str(err)) from err
 
     async def async_action(self, device_id: str, actions: list[dict]) -> None:
+        """Execute an action and refresh state without poisoning coordinator state."""
         try:
             await self.api.actions(device_id, actions)
-            await self.async_request_refresh()
-        except YandexApiError as err:
-            raise UpdateFailed(str(err)) from err
+        except YandexApiError:
+            # Action failures are command failures, not polling failures. Do not
+            # turn the whole coordinator unavailable when one command is rejected.
+            raise
+        await self.async_request_refresh()
