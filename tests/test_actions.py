@@ -15,25 +15,15 @@ CAP_ON_OFF = "devices.capabilities.on_off"
 CAP_RANGE = "devices.capabilities.range"
 CAP_COLOR = "devices.capabilities.color_setting"
 
-assert module.on_off(True) == {
-    "type": CAP_ON_OFF,
-    "state": {"instance": "on", "value": True},
-}
-
-assert module.brightness(55.6) == {
-    "type": CAP_RANGE,
-    "state": {"instance": "brightness", "value": 56},
-}
+assert module.on_off(True) == {"type": CAP_ON_OFF, "state": {"instance": "on", "value": True}}
+assert module.brightness(55.6) == {"type": CAP_RANGE, "state": {"instance": "brightness", "value": 56}}
 assert module.brightness(-10)["state"]["value"] == 0
 assert module.brightness(110)["state"]["value"] == 100
 
 hsv_payload = module.hsv(224.0, 55.7, 99.6)
 assert hsv_payload == {
     "type": CAP_COLOR,
-    "state": {
-        "instance": "hsv",
-        "value": {"h": 224, "s": 56, "v": 100},
-    },
+    "state": {"instance": "hsv", "value": {"h": 224, "s": 56, "v": 100}},
 }
 assert all(isinstance(hsv_payload["state"]["value"][key], int) for key in ("h", "s", "v"))
 assert module.hsv(-1, 101, 101)["state"]["value"] == {"h": 0, "s": 100, "v": 100}
@@ -43,6 +33,7 @@ assert module.rgb(255, 128, 1) == {
     "type": CAP_COLOR,
     "state": {"instance": "rgb", "value": 16744449},
 }
+assert module.rgb(999, -10, 300)["state"]["value"] == 16711935
 
 assert module.temperature_k(4000.4, 2700, 6500) == {
     "type": CAP_COLOR,
