@@ -10,6 +10,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .actions import hsv as hsv_action
 from .actions import on_off
 from .actions import scene as scene_action
+from .actions import temperature_k as temperature_action
 from .const import DOMAIN
 from .coordinator import YandexDataUpdateCoordinator
 
@@ -17,11 +18,11 @@ CAP_ON_OFF = "devices.capabilities.on_off"
 CAP_RANGE = "devices.capabilities.range"
 CAP_COLOR = "devices.capabilities.color_setting"
 
-# Temperature presets deliberately do not live here. Home Assistant's light
-# entity already provides native color-temperature control. This selector is
-# for colors and Yandex scenes/modes only.
+# Temperature presets deliberately do not live here except for the explicit
+# warm-white shortcut. The value is taken from the device's supported minimum
+# color temperature, so it always selects the warmest white the lamp supports.
 PRESETS: dict[str, dict[str, Any]] = {
-    "Тёплый цвет": {"kind": "hsv", "value": {"h": 30, "s": 65}},
+    "Тёплый белый": {"kind": "temperature_k"},
     "Красный": {"kind": "hsv", "value": {"h": 0, "s": 100}},
     "Зелёный": {"kind": "hsv", "value": {"h": 120, "s": 100}},
     "Синий": {"kind": "hsv", "value": {"h": 240, "s": 100}},
@@ -76,11 +77,22 @@ class YandexLightPresetSelect(CoordinatorEntity[YandexDataUpdateCoordinator], Se
         scenes = (((self._color_cap() or {}).get("parameters") or {}).get("color_scene") or {}).get("scenes", [])
         return scenes if isinstance(scenes, list) else []
 
+    def _temperature_range(self) -> tuple[int, int] | None:
+        temp = ((self._color_cap() or {}).get("parameters") or {}).get("temperature_k")
+        if not isinstance(temp, dict):
+            return None
+        try:
+            return int(temp.get("min", 2700)), int(temp.get("max", 6500))
+        except (TypeError, ValueError):
+            return None
+
     def _update_options(self) -> None:
         models = self._models()
         options: list[str] = []
+        if self._temperature_range() is not None:
+            options.append("Тёплый белый")
         if "hsv" in models or "rgb" in models:
-            options.extend(PRESETS)
+            options.extend(("Красный", "Зелёный", "Синий"))
         for item in self._scenes():
             scene_id = str(item.get("id", ""))
             if scene_id:
@@ -125,6 +137,8 @@ class YandexLightPresetSelect(CoordinatorEntity[YandexDataUpdateCoordinator], Se
             if name in self.options: return name
             for item in self._scenes():
                 if str(item.get("id")) == color_id: return str(item.get("name") or color_id)
+        if instance == "temperature_k" and isinstance(value, (int, float)) and self._temperature_range() is not None:
+            return "Тёплый белый"
         return None
 
     async def async_select_option(self, option: str) -> None:
@@ -134,8 +148,14 @@ class YandexLightPresetSelect(CoordinatorEntity[YandexDataUpdateCoordinator], Se
             return
         preset = PRESETS.get(option)
         if preset:
-            p = preset["value"]
-            action = hsv_action(p["h"], p["s"], self._brightness_value())
+            if preset["kind"] == "temperature_k":
+                temperature_range = self._temperature_range()
+                if temperature_range is None:
+                    return
+                action = temperature_action(temperature_range[0], *temperature_range)
+            else:
+                p = preset["value"]
+                action = hsv_action(p["h"], p["s"], self._brightness_value())
         else:
             scene_id = self._scene_by_name(option)
             if not scene_id:
@@ -151,7 +171,7 @@ class YandexLightPresetSelect(CoordinatorEntity[YandexDataUpdateCoordinator], Se
             "yandex_device_id": self.device_id,
             "preset_count": len(PRESETS),
             "scene_count": len(self._scenes()),
-            "temperature_presets": False,
+            "temperature_presets": True,
         }
 
 
