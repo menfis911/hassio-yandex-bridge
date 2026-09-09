@@ -126,9 +126,9 @@ jobs:
           assert "if not actions:" in api_source
           assert "Yandex-HABridge/" in api_source
 
-          # Documentation/version checks. Do not require fragile Markdown formatting.
+          # Documentation/version checks. Match the version heading even when it has a date suffix.
           assert re.search(rf"(?:^|[^0-9]){re.escape(version)}(?:[^0-9]|$)", readme), "README does not mention current version"
-          assert re.search(rf"^##\s+{re.escape(version)}\s*$", changelog, re.MULTILINE), "CHANGELOG is missing current version heading"
+          assert re.search(rf"^##\s+{re.escape(version)}(?:\s|$)", changelog, re.MULTILINE), "CHANGELOG is missing current version heading"
           assert "iot:control" in readme
           assert "Device Registry" in readme
           assert "Режим" in readme
