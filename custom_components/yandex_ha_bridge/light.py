@@ -262,12 +262,12 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
         if ATTR_HS_COLOR in kwargs and self._cap(CAP_COLOR) and "hsv" in models:
             h, s = kwargs[ATTR_HS_COLOR]
             v = max(1, min(100, round((kwargs.get(ATTR_BRIGHTNESS, self.brightness or 255)) * 100 / 255)))
-            actions.append({"type": CAP_COLOR, "state": {"instance": "hsv", "value": {"h": round(h, 2), "s": round(s, 2), "v": v}}})
+            actions.append({"type": CAP_COLOR, "state": {"instance": "hsv", "value": {"h": int(round(h)) % 361, "s": int(round(s)), "v": int(v)}}})
         elif ATTR_RGB_COLOR in kwargs and self._cap(CAP_COLOR):
             r, g, b = kwargs[ATTR_RGB_COLOR]
             if "hsv" in models:
                 h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
-                actions.append({"type": CAP_COLOR, "state": {"instance": "hsv", "value": {"h": round(h * 360, 2), "s": round(s * 100, 2), "v": round(v * 100, 2)}}})
+                actions.append({"type": CAP_COLOR, "state": {"instance": "hsv", "value": {"h": int(round(h * 360)) % 361, "s": int(round(s * 100)), "v": int(round(v * 100))}}})
             elif "rgb" in models:
                 actions.append({"type": CAP_COLOR, "state": {"instance": "rgb", "value": (int(r) << 16) | (int(g) << 8) | int(b)}})
         if ATTR_COLOR_TEMP_KELVIN in kwargs and self._has_color_capability("temperature_k"):
