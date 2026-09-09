@@ -7,10 +7,12 @@ from typing import Any
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_COLOR_TEMP_KELVIN,
+    ATTR_EFFECT,
     ATTR_HS_COLOR,
     ATTR_RGB_COLOR,
     ColorMode,
     LightEntity,
+    LightEntityFeature,
 )
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -19,6 +21,7 @@ from .actions import brightness as brightness_action
 from .actions import hsv as hsv_action
 from .actions import on_off
 from .actions import rgb as rgb_action
+from .actions import scene as scene_action
 from .actions import temperature_k as temperature_action
 from .const import DOMAIN
 from .coordinator import YandexDataUpdateCoordinator
@@ -26,6 +29,14 @@ from .coordinator import YandexDataUpdateCoordinator
 CAP_ON_OFF = "devices.capabilities.on_off"
 CAP_RANGE = "devices.capabilities.range"
 CAP_COLOR = "devices.capabilities.color_setting"
+
+
+SCENE_NAMES: dict[str, str] = {
+    "miracle": "Чудо", "fairy": "Сказочные огни", "northern": "Северное сияние", "christmas": "Рождество",
+    "alice": "Алиса", "party": "Вечеринка", "jungle": "Джунгли", "neon": "Неон", "night": "Ночь",
+    "ocean": "Океан", "romance": "Романтика", "candle": "Свеча", "siren": "Сирена", "alarm": "Тревога",
+    "fantasy": "Фантазия", "reading": "Чтение",
+}
 
 
 class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
@@ -91,6 +102,26 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
             return isinstance(params.get("temperature_k"), dict)
         return False
 
+    def _scenes(self) -> list[dict[str, Any]]:
+        scenes = (((self._cap(CAP_COLOR) or {}).get("parameters") or {}).get("color_scene") or {}).get("scenes", [])
+        return scenes if isinstance(scenes, list) else []
+
+    def _scene_name(self, scene_id: str) -> str:
+        for item in self._scenes():
+            if str(item.get("id")) == scene_id:
+                return str(item.get("name") or SCENE_NAMES.get(scene_id, scene_id))
+        return SCENE_NAMES.get(scene_id, scene_id)
+
+    def _scene_id_by_name(self, name: str) -> str | None:
+        for item in self._scenes():
+            scene_id = str(item.get("id", ""))
+            if scene_id and self._scene_name(scene_id) == name:
+                return scene_id
+        return None
+
+    def _effect_list(self) -> list[str]:
+        return [self._scene_name(str(item.get("id"))) for item in self._scenes() if item.get("id")]
+
     def _set_modes(self) -> None:
         models = self._color_models()
         has_hs = "hsv" in models or self._state(CAP_COLOR, "hsv") is not None
@@ -117,6 +148,7 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
             modes = {ColorMode.ONOFF}
             self._attr_color_mode = ColorMode.ONOFF
         self._attr_supported_color_modes = modes
+        self._attr_supported_features = LightEntityFeature.EFFECT if self._scenes() else LightEntityFeature(0)
 
     @property
     def is_on(self) -> bool:
@@ -165,42 +197,39 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
     def max_color_temp_kelvin(self) -> int:
         return self._temperature_range()[1]
 
-    def _color_name(self) -> str | None:
-        hsv = self._state(CAP_COLOR, "hsv")
-        if not isinstance(hsv, dict):
-            color_id = (((self._cap(CAP_COLOR) or {}).get("state") or {}).get("internal_state") or {}).get("color_id")
-            return {"warm_white": "Тёплый свет", "cool_white": "Холодный свет"}.get(color_id)
-        h, s = float(hsv.get("h", 0)) % 360, float(hsv.get("s", 0))
-        if s < 10: return "Белый"
-        if h < 15 or h >= 345: return "Красный"
-        if h < 45: return "Оранжевый"
-        if h < 75: return "Жёлтый"
-        if h < 165: return "Зелёный"
-        if h < 195: return "Бирюзовый"
-        if h < 255: return "Синий"
-        if h < 285: return "Фиолетовый"
-        return "Пурпурный"
+    @property
+    def effect_list(self) -> list[str] | None:
+        effects = self._effect_list()
+        return effects or None
 
+    @property
+    def effect(self) -> str | None:
+        state = (self._cap(CAP_COLOR) or {}).get("state") or {}
+        if state.get("instance") == "scene" and isinstance(state.get("value"), str):
+            return self._scene_name(state["value"])
+        internal = state.get("internal_state") or {}
+        color_id = internal.get("color_id")
+        if isinstance(color_id, str) and color_id in {str(x.get("id")) for x in self._scenes()}:
+            return self._scene_name(color_id)
+        return None
+
+    def _brightness_value(self) -> int:
+        value = self._state(CAP_RANGE, "brightness")
+        return max(1, min(100, int(round(float(value))))) if isinstance(value, (int, float)) else 100
+
+    @property
     def _mode_name(self) -> str | None:
         state = (self._cap(CAP_COLOR) or {}).get("state") or {}
-        if state.get("instance") == "scene": return "Сцена"
+        if state.get("instance") == "scene":
+            return "Сцена"
         internal = state.get("internal_state") or {}
-        if internal.get("color_id") and any(str(s.get("id")) == str(internal["color_id"]) for s in self._scenes()): return "Сцена"
+        if internal.get("color_id") and str(internal["color_id"]) in {str(x.get("id")) for x in self._scenes()}:
+            return "Сцена"
         models = self._color_models()
         if "hsv" in models: return "HSV"
         if "rgb" in models: return "RGB"
         if self._has_color_capability("temperature_k"): return "Цветовая температура"
         return None
-
-    def _scenes(self) -> list[dict[str, Any]]:
-        scenes = (((self._cap(CAP_COLOR) or {}).get("parameters") or {}).get("color_scene") or {}).get("scenes", [])
-        return scenes if isinstance(scenes, list) else []
-
-    @staticmethod
-    def _display_value(value: Any) -> Any:
-        if isinstance(value, (str, int, float, bool)) or value is None: return value
-        if isinstance(value, list): return ", ".join(str(x.get("name", x)) if isinstance(x, dict) else str(x) for x in value)
-        return str(value)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -213,8 +242,8 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
             "yandex_online": str(current.get("state", "")).lower() == "online", "yandex_power": self.is_on,
             "yandex_brightness": int(brightness_value) if brightness_value is not None else None,
             "yandex_color": self._color_name(), "yandex_temperature": self.color_temp_kelvin,
-            "yandex_mode": self._mode_name(), "yandex_device_id": self.device_id,
-            "yandex_device_type": current.get("type"), "yandex_state": current.get("state"),
+            "yandex_mode": self._mode_name, "yandex_effect": self.effect, "yandex_effects": self.effect_list,
+            "yandex_device_id": self.device_id, "yandex_device_type": current.get("type"), "yandex_state": current.get("state"),
             "yandex_room": self._display_value(room), "yandex_group": self._display_value(group),
             "yandex_manufacturer": info.get("manufacturer"), "yandex_model": info.get("model"),
             "yandex_color_model": ", ".join(sorted(self._color_models())) or None,
@@ -224,11 +253,36 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
             "yandex_temperature_max": (color_params.get("temperature_k") or {}).get("max"),
         }
 
+    def _color_name(self) -> str | None:
+        hsv = self._state(CAP_COLOR, "hsv")
+        if not isinstance(hsv, dict):
+            return None
+        h, s = float(hsv.get("h", 0)) % 360, float(hsv.get("s", 0))
+        if s < 10: return "Белый"
+        if h < 15 or h >= 345: return "Красный"
+        if h < 45: return "Оранжевый"
+        if h < 75: return "Жёлтый"
+        if h < 165: return "Зелёный"
+        if h < 195: return "Бирюзовый"
+        if h < 255: return "Синий"
+        if h < 285: return "Фиолетовый"
+        return "Пурпурный"
+
+    @staticmethod
+    def _display_value(value: Any) -> Any:
+        if isinstance(value, (str, int, float, bool)) or value is None: return value
+        if isinstance(value, list): return ", ".join(str(x.get("name", x)) if isinstance(x, dict) else str(x) for x in value)
+        return str(value)
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         actions: list[dict[str, Any]] = []
         if self._cap(CAP_ON_OFF, "on"):
             actions.append(on_off(True))
-        if ATTR_BRIGHTNESS in kwargs and self._cap(CAP_RANGE, "brightness"):
+        if ATTR_EFFECT in kwargs and kwargs[ATTR_EFFECT] in (self.effect_list or []):
+            scene_id = self._scene_id_by_name(kwargs[ATTR_EFFECT])
+            if scene_id:
+                actions.append(scene_action(scene_id))
+        elif ATTR_BRIGHTNESS in kwargs and self._cap(CAP_RANGE, "brightness"):
             actions.append(brightness_action(kwargs[ATTR_BRIGHTNESS] * 100 / 255))
         models = self._color_models()
         if ATTR_HS_COLOR in kwargs and "hsv" in models:
