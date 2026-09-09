@@ -8,7 +8,7 @@ import urllib.request
 from typing import Any
 
 API = "https://api.iot.yandex.net"
-VERSION = "0.4.1"
+VERSION = "0.5.0"
 
 
 class YandexApiError(Exception):
