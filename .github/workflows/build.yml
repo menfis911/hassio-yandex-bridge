@@ -84,7 +84,9 @@ jobs:
           assert '"instance": "hsv"' in actions_source
           assert '"instance": "temperature_k"' in actions_source
           assert '"instance": "on"' in actions_source
-          assert "int(round(float(h)))" in actions_source
+          assert "int(round(float(value)))" in actions_source
+          assert "LightEntityFeature.EFFECT" in light_source
+          assert "ATTR_EFFECT" in light_source
 
           assert "/v1.0/devices/actions" in api_source
           assert "iot:control" in api_source
