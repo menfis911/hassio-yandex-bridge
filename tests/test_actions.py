@@ -1,11 +1,14 @@
-"""Executable contract tests for Yandex Smart Home action payloads."""
+"""Executable contract tests for Yandex Smart Home action payloads and light groups."""
 from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
 
 
-ACTIONS_PATH = Path(__file__).parents[1] / "custom_components" / "yandex_ha_bridge" / "actions.py"
+ROOT = Path(__file__).parents[1]
+ACTIONS_PATH = ROOT / "custom_components" / "yandex_ha_bridge" / "actions.py"
+GROUP_PATH = ROOT / "custom_components" / "yandex_ha_bridge" / "groups.py"
+LIGHT_PATH = ROOT / "custom_components" / "yandex_ha_bridge" / "light.py"
 spec = importlib.util.spec_from_file_location("yandex_ha_bridge_actions", ACTIONS_PATH)
 assert spec and spec.loader
 module = importlib.util.module_from_spec(spec)
@@ -49,4 +52,16 @@ assert scene_payload == {
 }
 assert scene_payload["state"]["instance"] != "color_scene"
 
-print("Yandex action contract tests passed")
+# 0.6.0 light-group contract: existing individual lights remain the source
+# entities, while a separate aggregate light proxies standard light actions.
+group_source = GROUP_PATH.read_text(encoding="utf-8")
+light_source = LIGHT_PATH.read_text(encoding="utf-8")
+assert "class YandexLightsGroup" in group_source
+assert "light", "turn_on" in group_source
+assert "light", "turn_off" in group_source
+assert "_yandex_lights_group" in group_source
+assert "YandexLightsGroup" in light_source
+assert "if len(lights) >= 2" in light_source
+assert "entities = list(lights)" in light_source
+
+print("Yandex action and light-group contract tests passed")
