@@ -8,7 +8,7 @@ import urllib.request
 from typing import Any
 
 API = "https://api.iot.yandex.net"
-VERSION = "0.3.12"
+VERSION = "0.4.0"
 
 
 class YandexApiError(Exception):
@@ -26,12 +26,7 @@ class YandexApi:
     def __init__(self, token: str) -> None:
         self.token = token
 
-    async def _request(
-        self,
-        method: str,
-        path: str,
-        payload: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    async def _request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         def request() -> dict[str, Any]:
             data = json.dumps(payload, separators=(",", ":")).encode() if payload is not None else None
             req = urllib.request.Request(
@@ -59,13 +54,8 @@ class YandexApi:
                     details = body.get("message") or body.get("error_message") or ""
                 except json.JSONDecodeError:
                     details = raw.strip()
-
                 if err.code == 403 and method == "POST" and path == "/v1.0/devices/actions":
-                    message = (
-                        "Yandex rejected the device action with HTTP 403. "
-                        "The OAuth token must include the iot:control permission. "
-                        "Reading devices only requires iot:view."
-                    )
+                    message = "Yandex rejected the device action with HTTP 403. The OAuth token must include the iot:control permission. Reading devices only requires iot:view."
                 elif err.code == 403:
                     message = "Yandex API denied the request (HTTP 403). Check the OAuth token permissions."
                 else:
@@ -92,8 +82,4 @@ class YandexApi:
     async def actions(self, device_id: str, actions: list[dict[str, Any]]) -> dict[str, Any]:
         if not actions:
             return {}
-        return await self._request(
-            "POST",
-            "/v1.0/devices/actions",
-            {"devices": [{"id": device_id, "actions": actions}]},
-        )
+        return await self._request("POST", "/v1.0/devices/actions", {"devices": [{"id": device_id, "actions": actions}]})
