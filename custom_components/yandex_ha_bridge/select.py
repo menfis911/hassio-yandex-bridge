@@ -10,7 +10,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .actions import hsv as hsv_action
 from .actions import on_off
 from .actions import scene as scene_action
-from .actions import temperature_k as temperature_action
 from .const import DOMAIN
 from .coordinator import YandexDataUpdateCoordinator
 
@@ -18,10 +17,11 @@ CAP_ON_OFF = "devices.capabilities.on_off"
 CAP_RANGE = "devices.capabilities.range"
 CAP_COLOR = "devices.capabilities.color_setting"
 
+# Temperature presets deliberately do not live here. Home Assistant's light
+# entity already provides native color-temperature control. This selector is
+# for colors and Yandex scenes/modes only.
 PRESETS: dict[str, dict[str, Any]] = {
-    "Тёплый свет": {"kind": "temperature", "value": 2700},
-    "Нейтральный свет": {"kind": "temperature", "value": 4000},
-    "Холодный свет": {"kind": "temperature", "value": 6500},
+    "Тёплый цвет": {"kind": "hsv", "value": {"h": 30, "s": 65}},
     "Красный": {"kind": "hsv", "value": {"h": 0, "s": 100}},
     "Зелёный": {"kind": "hsv", "value": {"h": 120, "s": 100}},
     "Синий": {"kind": "hsv", "value": {"h": 240, "s": 100}},
@@ -36,7 +36,7 @@ SCENE_NAMES: dict[str, str] = {
 
 
 class YandexLightPresetSelect(CoordinatorEntity[YandexDataUpdateCoordinator], SelectEntity):
-    """Quick presets and Yandex color scenes for a light."""
+    """Quick colors and Yandex scenes for a light."""
 
     _attr_has_entity_name = True
     _attr_icon = "mdi:palette"
@@ -46,10 +46,12 @@ class YandexLightPresetSelect(CoordinatorEntity[YandexDataUpdateCoordinator], Se
         self.device_id, self.device = device_id, device
         self._attr_unique_id = f"{device_id}_presets"
         self._attr_name = "Режим"
+        info = device.get("device_info") or {}
+        room = device.get("room") or device.get("room_name") or info.get("room")
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device_id)}, name=device.get("name") or "Yandex light",
-            manufacturer=(device.get("device_info") or {}).get("manufacturer"),
-            model=(device.get("device_info") or {}).get("model"), serial_number=device_id,
+            manufacturer=info.get("manufacturer"), model=info.get("model"), serial_number=device_id,
+            suggested_area=room,
         )
         self._update_options()
 
@@ -74,22 +76,17 @@ class YandexLightPresetSelect(CoordinatorEntity[YandexDataUpdateCoordinator], Se
         scenes = (((self._color_cap() or {}).get("parameters") or {}).get("color_scene") or {}).get("scenes", [])
         return scenes if isinstance(scenes, list) else []
 
-    def _temperature_range(self) -> tuple[int, int]:
-        temp = ((self._color_cap() or {}).get("parameters") or {}).get("temperature_k") or {}
-        return int(temp.get("min", 2700)), int(temp.get("max", 6500))
-
     def _update_options(self) -> None:
         models = self._models()
         options: list[str] = []
-        if "temperature_k" in models or isinstance((((self._color_cap() or {}).get("parameters") or {}).get("temperature_k")), dict):
-            options.extend(name for name, data in PRESETS.items() if data["kind"] == "temperature")
         if "hsv" in models or "rgb" in models:
-            options.extend(name for name, data in PRESETS.items() if data["kind"] == "hsv")
+            options.extend(PRESETS)
         for item in self._scenes():
             scene_id = str(item.get("id", ""))
             if scene_id:
                 name = str(item.get("name") or SCENE_NAMES.get(scene_id, scene_id))
-                if name not in options: options.append(name)
+                if name not in options:
+                    options.append(name)
         self._attr_options = options
 
     def _scene_by_name(self, name: str) -> str | None:
@@ -101,11 +98,13 @@ class YandexLightPresetSelect(CoordinatorEntity[YandexDataUpdateCoordinator], Se
 
     def _brightness_value(self) -> int:
         for cap in self.current.get("capabilities", []):
-            if cap.get("type") != CAP_RANGE: continue
+            if cap.get("type") != CAP_RANGE:
+                continue
             params, state = cap.get("parameters") or {}, cap.get("state") or {}
             if params.get("instance") == "brightness" or state.get("instance") == "brightness":
                 value = state.get("value")
-                if isinstance(value, (int, float)): return max(1, min(100, int(round(float(value)))))
+                if isinstance(value, (int, float)):
+                    return max(1, min(100, int(round(float(value)))))
         return 100
 
     @property
@@ -126,26 +125,21 @@ class YandexLightPresetSelect(CoordinatorEntity[YandexDataUpdateCoordinator], Se
             if name in self.options: return name
             for item in self._scenes():
                 if str(item.get("id")) == color_id: return str(item.get("name") or color_id)
-        if instance == "temperature_k" and isinstance(value, (int, float)):
-            candidates = [(n, d["value"]) for n, d in PRESETS.items() if d["kind"] == "temperature" and n in self.options]
-            if candidates:
-                name, temp = min(candidates, key=lambda x: abs(x[1] - float(value)))
-                if abs(temp - float(value)) <= 150: return name
         return None
 
     async def async_select_option(self, option: str) -> None:
         self._update_options()
         color_cap = self._color_cap()
-        if not color_cap or option not in self.options: return
+        if not color_cap or option not in self.options:
+            return
         preset = PRESETS.get(option)
-        if preset and preset["kind"] == "temperature":
-            action = temperature_action(preset["value"], *self._temperature_range())
-        elif preset:
+        if preset:
             p = preset["value"]
             action = hsv_action(p["h"], p["s"], self._brightness_value())
         else:
             scene_id = self._scene_by_name(option)
-            if not scene_id: return
+            if not scene_id:
+                return
             action = scene_action(scene_id)
         actions = [on_off(True)] if any(c.get("type") == CAP_ON_OFF for c in self.current.get("capabilities", [])) else []
         actions.append(action)
@@ -153,7 +147,12 @@ class YandexLightPresetSelect(CoordinatorEntity[YandexDataUpdateCoordinator], Se
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {"yandex_device_id": self.device_id, "preset_count": len(PRESETS), "scene_count": len(self._scenes())}
+        return {
+            "yandex_device_id": self.device_id,
+            "preset_count": len(PRESETS),
+            "scene_count": len(self._scenes()),
+            "temperature_presets": False,
+        }
 
 
 async def async_setup_entry(hass, entry, async_add_entities) -> None:
