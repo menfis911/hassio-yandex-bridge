@@ -21,6 +21,10 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import YandexDataUpdateCoordinator
 
+CAP_ON_OFF = "devices.capabilities.on_off"
+CAP_RANGE = "devices.capabilities.range"
+CAP_COLOR = "devices.capabilities.color_setting"
+
 
 class YandexLightsGroup(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
     """Control all selected Yandex lights as one Home Assistant light."""
@@ -37,6 +41,88 @@ class YandexLightsGroup(CoordinatorEntity[YandexDataUpdateCoordinator], LightEnt
         self._attr_icon = "mdi:lightbulb-group"
         self._refresh_capabilities()
 
+    @staticmethod
+    def _device_modes(device: dict[str, Any]) -> set[ColorMode]:
+        capabilities = device.get("capabilities", [])
+        capabilities = capabilities if isinstance(capabilities, list) else []
+
+        def cap(capability_type: str, instance: str | None = None) -> dict[str, Any] | None:
+            for item in capabilities:
+                if item.get("type") != capability_type:
+                    continue
+                if instance is None:
+                    return item
+                state = item.get("state") or {}
+                params = item.get("parameters") or {}
+                if state.get("instance") == instance or params.get("instance") == instance:
+                    return item
+            return None
+
+        color = cap(CAP_COLOR)
+        params = (color or {}).get("parameters") or {}
+        raw_models = params.get("color_model")
+        models = {raw_models.lower()} if isinstance(raw_models, str) else {
+            str(model).lower() for model in raw_models
+        } if isinstance(raw_models, (list, tuple, set)) else set()
+        state = (color or {}).get("state") or {}
+        has_hs = "hsv" in models or state.get("instance") == "hsv"
+        has_rgb = "rgb" in models or state.get("instance") == "rgb"
+        has_temp = isinstance(params.get("temperature_k"), dict) or state.get("instance") == "temperature_k"
+        has_brightness = cap(CAP_RANGE, "brightness") is not None
+
+        if has_hs:
+            modes = {ColorMode.HS}
+            if has_temp:
+                modes.add(ColorMode.COLOR_TEMP)
+            return modes
+        if has_rgb:
+            modes = {ColorMode.RGB}
+            if has_temp:
+                modes.add(ColorMode.COLOR_TEMP)
+            return modes
+        if has_temp:
+            return {ColorMode.COLOR_TEMP}
+        if has_brightness:
+            return {ColorMode.BRIGHTNESS}
+        return {ColorMode.ONOFF}
+
+    def _refresh_capabilities(self) -> None:
+        devices = [self.coordinator.data.get(device_id) for device_id in self.device_ids]
+        devices = [device for device in devices if device]
+        if not devices:
+            self._attr_supported_color_modes = {ColorMode.ONOFF}
+            self._attr_color_mode = ColorMode.ONOFF
+            self._attr_supported_features = LightEntityFeature(0)
+            return
+
+        mode_sets = [self._device_modes(device) for device in devices]
+        common_modes = set.intersection(*mode_sets)
+        if not common_modes:
+            common_modes = {ColorMode.ONOFF}
+        self._attr_supported_color_modes = common_modes
+        self._attr_color_mode = self._current_common_mode(common_modes)
+
+        if all(self._device_effects(device) for device in devices):
+            self._attr_supported_features = LightEntityFeature.EFFECT
+        else:
+            self._attr_supported_features = LightEntityFeature(0)
+
+    def _device_effects(self, device: dict[str, Any]) -> list[str]:
+        for capability in device.get("capabilities", []) or []:
+            if capability.get("type") != CAP_COLOR:
+                continue
+            scenes = (((capability.get("parameters") or {}).get("color_scene") or {}).get("scenes"))
+            if isinstance(scenes, list):
+                return [str(item.get("name") or item.get("id")) for item in scenes if item.get("id")]
+        return []
+
+    def _current_common_mode(self, supported: set[ColorMode]) -> ColorMode:
+        for state in self._member_states():
+            mode = state.attributes.get("color_mode")
+            if mode in supported:
+                return mode
+        return next(iter(supported))
+
     def _member_entity_ids(self) -> list[str]:
         registry = er.async_get(self.hass)
         result: list[str] = []
@@ -49,39 +135,9 @@ class YandexLightsGroup(CoordinatorEntity[YandexDataUpdateCoordinator], LightEnt
     def _member_states(self):
         return [self.hass.states.get(entity_id) for entity_id in self._member_entity_ids()]
 
-    def _refresh_capabilities(self) -> None:
-        states = self._member_states()
-        if not states:
-            self._attr_supported_color_modes = {ColorMode.ONOFF}
-            self._attr_color_mode = ColorMode.ONOFF
-            self._attr_supported_features = LightEntityFeature(0)
-            return
-
-        mode_sets = []
-        for state in states:
-            raw = state.attributes.get(ATTR_SUPPORTED_COLOR_MODES, [])
-            mode_sets.append(set(raw))
-        common_modes = set.intersection(*mode_sets) if mode_sets else set()
-        if not common_modes:
-            common_modes = {ColorMode.ONOFF}
-        self._attr_supported_color_modes = common_modes
-        self._attr_color_mode = self._current_common_mode(states, common_modes)
-        if all(state.attributes.get("effect_list") for state in states):
-            self._attr_supported_features = LightEntityFeature.EFFECT
-        else:
-            self._attr_supported_features = LightEntityFeature(0)
-
-    @staticmethod
-    def _current_common_mode(states, supported: set[ColorMode]) -> ColorMode:
-        for state in states:
-            mode = state.attributes.get("color_mode")
-            if mode in supported:
-                return mode
-        return next(iter(supported))
-
-    async def async_update(self) -> None:
-        """Refresh group capabilities and state from member entities."""
+    def _handle_coordinator_update(self) -> None:
         self._refresh_capabilities()
+        super()._handle_coordinator_update()
 
     @property
     def available(self) -> bool:
