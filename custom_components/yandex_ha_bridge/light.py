@@ -25,6 +25,7 @@ from .actions import scene as scene_action
 from .actions import temperature_k as temperature_action
 from .const import DOMAIN
 from .coordinator import YandexDataUpdateCoordinator
+from .groups import YandexLightsGroup
 
 CAP_ON_OFF = "devices.capabilities.on_off"
 CAP_RANGE = "devices.capabilities.range"
@@ -310,4 +311,12 @@ class YandexLight(CoordinatorEntity[YandexDataUpdateCoordinator], LightEntity):
 async def async_setup_entry(hass, entry, async_add_entities) -> None:
     """Set up Yandex light entities."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([YandexLight(coordinator, device_id, device) for device_id, device in coordinator.data.items() if device.get("type", "").startswith("devices.types.light")])
+    lights = [
+        YandexLight(coordinator, device_id, device)
+        for device_id, device in coordinator.data.items()
+        if device.get("type", "").startswith("devices.types.light")
+    ]
+    entities = list(lights)
+    if len(lights) >= 2:
+        entities.append(YandexLightsGroup(hass, coordinator, [light.device_id for light in lights]))
+    async_add_entities(entities)
