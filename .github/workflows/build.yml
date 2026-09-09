@@ -40,6 +40,7 @@ jobs:
           ru = json.loads((root / "translations/ru.json").read_text(encoding="utf-8"))
           light_source = (root / "light.py").read_text(encoding="utf-8")
           select_source = (root / "select.py").read_text(encoding="utf-8")
+          actions_source = (root / "actions.py").read_text(encoding="utf-8")
           init_source = (root / "__init__.py").read_text(encoding="utf-8")
           coordinator_source = (root / "coordinator.py").read_text(encoding="utf-8")
           api_source = (root / "api.py").read_text(encoding="utf-8")
@@ -49,7 +50,6 @@ jobs:
           app_config = Path("yandex_ha_bridge/config.yaml").read_text(encoding="utf-8")
           bridge_source = Path("yandex_ha_bridge/app/bridge.py").read_text(encoding="utf-8")
 
-          # Parse every Python file explicitly. compileall above is retained as a fast baseline.
           for path in [*root.glob("*.py"), *Path("yandex_ha_bridge/app").glob("*.py")]:
               ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
@@ -74,7 +74,6 @@ jobs:
           assert (root / "config_flow.py").is_file()
           assert not (root / "strings.json").exists()
 
-          # Light platform contract.
           assert "from homeassistant.components.light import" in light_source
           assert "ATTR_BRIGHTNESS" in light_source
           assert "ATTR_RGB_COLOR" in light_source
@@ -92,7 +91,6 @@ jobs:
           assert "temperature_k" in light_source
           assert "color_model" in light_source
 
-          # Select platform contract: presets/scenes must remain covered by CI.
           assert "from homeassistant.components.select import SelectEntity" in select_source
           assert "class YandexLightPresetSelect" in select_source
           assert "async_setup_entry" in select_source
@@ -104,29 +102,24 @@ jobs:
           assert '"Синий"' in select_source
           assert '"party": "Вечеринка"' in select_source
           assert '"color_scene"' in select_source
-          assert '"instance": "color_scene"' in select_source
-          assert '"instance": "temperature_k"' in select_source
-          assert '"instance": "hsv"' in select_source
-          assert '"instance": "on"' in select_source
+          assert '"instance": "scene"' in actions_source
+          assert '"instance": "color_scene"' not in actions_source
+          assert '"instance": "temperature_k"' in actions_source
+          assert '"instance": "hsv"' in actions_source
+          assert '"instance": "on"' in actions_source
+          assert "int(round(float(h)))" in actions_source
 
-          # Platform registration must include both light and select.
           assert "PLATFORMS = [Platform.LIGHT, Platform.SELECT]" in const_source
-
-          # Coordinator/action contract.
           assert "config_entry=entry" in coordinator_source
           assert "except YandexApiError as err:" in coordinator_source
           assert "raise UpdateFailed(str(err)) from err" in coordinator_source
           assert "async def async_action" in coordinator_source
           assert "except YandexApiError:" in coordinator_source
           assert "await self.async_request_refresh()" in coordinator_source
-
-          # Yandex control API contract.
           assert "/v1.0/devices/actions" in api_source
           assert "iot:control" in api_source
           assert "if not actions:" in api_source
           assert "Yandex-HABridge/" in api_source
-
-          # Documentation/version checks. Match the version heading even when it has a date suffix.
           assert re.search(rf"(?:^|[^0-9]){re.escape(version)}(?:[^0-9]|$)", readme), "README does not mention current version"
           assert re.search(rf"^##\s+{re.escape(version)}(?:\s|$)", changelog, re.MULTILINE), "CHANGELOG is missing current version heading"
           assert "iot:control" in readme
