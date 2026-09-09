@@ -10,6 +10,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import YandexDataUpdateCoordinator
 
+CAP_ON_OFF = "devices.capabilities.on_off"
 CAP_COLOR = "devices.capabilities.color_setting"
 
 PRESETS: dict[str, dict[str, Any]] = {
@@ -104,6 +105,11 @@ class YandexLightPresetSelect(
                 return scene_id
         return None
 
+    def _temperature_range(self) -> tuple[int, int]:
+        params = (self._color_cap() or {}).get("parameters") or {}
+        temperature = params.get("temperature_k") or {}
+        return int(temperature.get("min", 2700)), int(temperature.get("max", 6500))
+
     @property
     def current_option(self) -> str | None:
         cap = self._color_cap() or {}
@@ -118,14 +124,22 @@ class YandexLightPresetSelect(
 
         value = state.get("value")
         if state.get("instance") == "temperature_k" and isinstance(value, (int, float)):
-            nearest = min(
-                PRESETS.items(),
-                key=lambda item: abs(item[1]["value"] - float(value))
-                if item[1]["kind"] == "temperature"
-                else float("inf"),
-            )
-            if nearest[1]["kind"] == "temperature" and abs(nearest[1]["value"] - float(value)) <= 150:
+            temperature_options = [
+                (name, data["value"])
+                for name, data in PRESETS.items()
+                if data["kind"] == "temperature"
+            ]
+            nearest = min(temperature_options, key=lambda item: abs(item[1] - float(value)))
+            if abs(nearest[1] - float(value)) <= 150:
                 return nearest[0]
+
+        if state.get("instance") == "scene" and isinstance(value, str):
+            name = SCENE_NAMES.get(value)
+            if name in self.options:
+                return name
+            for scene in self._scenes(self.current):
+                if str(scene.get("id")) == value:
+                    return str(scene.get("name") or value)
 
         if isinstance(color_id, str):
             name = SCENE_NAMES.get(color_id)
@@ -145,17 +159,16 @@ class YandexLightPresetSelect(
         preset = PRESETS.get(option)
         if preset:
             if preset["kind"] == "temperature":
+                min_temp, max_temp = self._temperature_range()
                 action = {
                     "type": CAP_COLOR,
                     "state": {
                         "instance": "temperature_k",
-                        "value": int(preset["value"]),
+                        "value": max(min_temp, min(max_temp, int(preset["value"]))),
                     },
                 }
             else:
-                hsv = dict(preset["value"])
-                current_brightness = self._brightness_value()
-                hsv["v"] = current_brightness
+                hsv = {"h": int(preset["value"]["h"]), "s": int(preset["value"]["s"]), "v": self._brightness_value()}
                 action = {
                     "type": CAP_COLOR,
                     "state": {"instance": "hsv", "value": hsv},
@@ -166,16 +179,14 @@ class YandexLightPresetSelect(
                 return
             action = {
                 "type": CAP_COLOR,
-                "state": {"instance": "color_scene", "value": scene_id},
+                "state": {"instance": "scene", "value": scene_id},
             }
 
-        await self.coordinator.async_action(
-            self.device_id,
-            [
-                {"type": "devices.capabilities.on_off", "state": {"instance": "on", "value": True}},
-                action,
-            ],
-        )
+        actions = []
+        if any(cap.get("type") == CAP_ON_OFF for cap in self.current.get("capabilities", [])):
+            actions.append({"type": CAP_ON_OFF, "state": {"instance": "on", "value": True}})
+        actions.append(action)
+        await self.coordinator.async_action(self.device_id, actions)
 
     def _brightness_value(self) -> int:
         for cap in self.current.get("capabilities", []):
@@ -186,7 +197,7 @@ class YandexLightPresetSelect(
             if params.get("instance") == "brightness" or state.get("instance") == "brightness":
                 value = state.get("value")
                 if isinstance(value, (int, float)):
-                    return max(1, min(100, round(float(value))))
+                    return max(1, min(100, int(round(float(value)))))
         return 100
 
     @property
