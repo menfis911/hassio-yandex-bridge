@@ -7,10 +7,15 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .actions import hsv as hsv_action
+from .actions import on_off
+from .actions import scene as scene_action
+from .actions import temperature_k as temperature_action
 from .const import DOMAIN
 from .coordinator import YandexDataUpdateCoordinator
 
 CAP_ON_OFF = "devices.capabilities.on_off"
+CAP_RANGE = "devices.capabilities.range"
 CAP_COLOR = "devices.capabilities.color_setting"
 
 PRESETS: dict[str, dict[str, Any]] = {
@@ -23,28 +28,14 @@ PRESETS: dict[str, dict[str, Any]] = {
 }
 
 SCENE_NAMES: dict[str, str] = {
-    "miracle": "Чудо",
-    "fairy": "Сказочные огни",
-    "northern": "Северное сияние",
-    "christmas": "Рождество",
-    "alice": "Алиса",
-    "party": "Вечеринка",
-    "jungle": "Джунгли",
-    "neon": "Неон",
-    "night": "Ночь",
-    "ocean": "Океан",
-    "romance": "Романтика",
-    "candle": "Свеча",
-    "siren": "Сирена",
-    "alarm": "Тревога",
-    "fantasy": "Фантазия",
-    "reading": "Чтение",
+    "miracle": "Чудо", "fairy": "Сказочные огни", "northern": "Северное сияние", "christmas": "Рождество",
+    "alice": "Алиса", "party": "Вечеринка", "jungle": "Джунгли", "neon": "Неон", "night": "Ночь",
+    "ocean": "Океан", "romance": "Романтика", "candle": "Свеча", "siren": "Сирена", "alarm": "Тревога",
+    "fantasy": "Фантазия", "reading": "Чтение",
 }
 
 
-class YandexLightPresetSelect(
-    CoordinatorEntity[YandexDataUpdateCoordinator], SelectEntity
-):
+class YandexLightPresetSelect(CoordinatorEntity[YandexDataUpdateCoordinator], SelectEntity):
     """Quick presets and Yandex color scenes for a light."""
 
     _attr_has_entity_name = True
@@ -52,18 +43,15 @@ class YandexLightPresetSelect(
 
     def __init__(self, coordinator: YandexDataUpdateCoordinator, device_id: str, device: dict[str, Any]) -> None:
         super().__init__(coordinator)
-        self.device_id = device_id
-        self.device = device
+        self.device_id, self.device = device_id, device
         self._attr_unique_id = f"{device_id}_presets"
         self._attr_name = "Режим"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device_id)},
-            name=device.get("name") or "Yandex light",
+            identifiers={(DOMAIN, device_id)}, name=device.get("name") or "Yandex light",
             manufacturer=(device.get("device_info") or {}).get("manufacturer"),
-            model=(device.get("device_info") or {}).get("model"),
-            serial_number=device_id,
+            model=(device.get("device_info") or {}).get("model"), serial_number=device_id,
         )
-        self._attr_options = self._build_options(device)
+        self._update_options()
 
     @property
     def current(self) -> dict[str, Any]:
@@ -75,138 +63,97 @@ class YandexLightPresetSelect(
                 return cap
         return None
 
-    def _build_options(self, device: dict[str, Any]) -> list[str]:
-        options = list(PRESETS)
-        for scene in self._scenes(device):
-            scene_id = str(scene.get("id", ""))
-            if not scene_id:
-                continue
-            name = str(scene.get("name") or SCENE_NAMES.get(scene_id, scene_id))
-            if name not in options:
-                options.append(name)
-        return options
+    def _models(self) -> set[str]:
+        params = (self._color_cap() or {}).get("parameters") or {}
+        raw = params.get("color_model")
+        if isinstance(raw, str): return {raw.lower()}
+        if isinstance(raw, (list, tuple, set)): return {str(x).lower() for x in raw}
+        return set()
 
-    @staticmethod
-    def _scenes(device: dict[str, Any]) -> list[dict[str, Any]]:
-        for cap in device.get("capabilities", []):
-            if cap.get("type") != CAP_COLOR:
-                continue
-            params = cap.get("parameters") or {}
-            scenes = params.get("color_scene", {}).get("scenes", [])
-            if isinstance(scenes, list):
-                return [scene for scene in scenes if isinstance(scene, dict)]
-        return []
+    def _scenes(self) -> list[dict[str, Any]]:
+        scenes = (((self._color_cap() or {}).get("parameters") or {}).get("color_scene") or {}).get("scenes", [])
+        return scenes if isinstance(scenes, list) else []
+
+    def _temperature_range(self) -> tuple[int, int]:
+        temp = ((self._color_cap() or {}).get("parameters") or {}).get("temperature_k") or {}
+        return int(temp.get("min", 2700)), int(temp.get("max", 6500))
+
+    def _update_options(self) -> None:
+        models = self._models()
+        options: list[str] = []
+        if "temperature_k" in models or isinstance((((self._color_cap() or {}).get("parameters") or {}).get("temperature_k")), dict):
+            options.extend(name for name, data in PRESETS.items() if data["kind"] == "temperature")
+        if "hsv" in models or "rgb" in models:
+            options.extend(name for name, data in PRESETS.items() if data["kind"] == "hsv")
+        for item in self._scenes():
+            scene_id = str(item.get("id", ""))
+            if scene_id:
+                name = str(item.get("name") or SCENE_NAMES.get(scene_id, scene_id))
+                if name not in options: options.append(name)
+        self._attr_options = options
 
     def _scene_by_name(self, name: str) -> str | None:
-        for scene in self._scenes(self.current):
-            scene_id = str(scene.get("id", ""))
-            scene_name = str(scene.get("name") or SCENE_NAMES.get(scene_id, scene_id))
-            if scene_name == name:
+        for item in self._scenes():
+            scene_id = str(item.get("id", ""))
+            if str(item.get("name") or SCENE_NAMES.get(scene_id, scene_id)) == name:
                 return scene_id
         return None
 
-    def _temperature_range(self) -> tuple[int, int]:
-        params = (self._color_cap() or {}).get("parameters") or {}
-        temperature = params.get("temperature_k") or {}
-        return int(temperature.get("min", 2700)), int(temperature.get("max", 6500))
-
-    @property
-    def current_option(self) -> str | None:
-        cap = self._color_cap() or {}
-        state = cap.get("state") or {}
-        internal = state.get("internal_state") or {}
-        color_id = internal.get("color_id")
-
-        if color_id == "warm_white":
-            return "Тёплый свет"
-        if color_id == "cool_white":
-            return "Холодный свет"
-
-        value = state.get("value")
-        if state.get("instance") == "temperature_k" and isinstance(value, (int, float)):
-            temperature_options = [
-                (name, data["value"])
-                for name, data in PRESETS.items()
-                if data["kind"] == "temperature"
-            ]
-            nearest = min(temperature_options, key=lambda item: abs(item[1] - float(value)))
-            if abs(nearest[1] - float(value)) <= 150:
-                return nearest[0]
-
-        if state.get("instance") == "scene" and isinstance(value, str):
-            name = SCENE_NAMES.get(value)
-            if name in self.options:
-                return name
-            for scene in self._scenes(self.current):
-                if str(scene.get("id")) == value:
-                    return str(scene.get("name") or value)
-
-        if isinstance(color_id, str):
-            name = SCENE_NAMES.get(color_id)
-            if name in self.options:
-                return name
-            for scene in self._scenes(self.current):
-                if str(scene.get("id")) == color_id:
-                    return str(scene.get("name") or color_id)
-
-        return None
-
-    async def async_select_option(self, option: str) -> None:
-        color_cap = self._color_cap()
-        if not color_cap:
-            return
-
-        preset = PRESETS.get(option)
-        if preset:
-            if preset["kind"] == "temperature":
-                min_temp, max_temp = self._temperature_range()
-                action = {
-                    "type": CAP_COLOR,
-                    "state": {
-                        "instance": "temperature_k",
-                        "value": max(min_temp, min(max_temp, int(preset["value"]))),
-                    },
-                }
-            else:
-                hsv = {"h": int(preset["value"]["h"]), "s": int(preset["value"]["s"]), "v": self._brightness_value()}
-                action = {
-                    "type": CAP_COLOR,
-                    "state": {"instance": "hsv", "value": hsv},
-                }
-        else:
-            scene_id = self._scene_by_name(option)
-            if not scene_id:
-                return
-            action = {
-                "type": CAP_COLOR,
-                "state": {"instance": "scene", "value": scene_id},
-            }
-
-        actions = []
-        if any(cap.get("type") == CAP_ON_OFF for cap in self.current.get("capabilities", [])):
-            actions.append({"type": CAP_ON_OFF, "state": {"instance": "on", "value": True}})
-        actions.append(action)
-        await self.coordinator.async_action(self.device_id, actions)
-
     def _brightness_value(self) -> int:
         for cap in self.current.get("capabilities", []):
-            if cap.get("type") != "devices.capabilities.range":
-                continue
-            params = cap.get("parameters") or {}
-            state = cap.get("state") or {}
+            if cap.get("type") != CAP_RANGE: continue
+            params, state = cap.get("parameters") or {}, cap.get("state") or {}
             if params.get("instance") == "brightness" or state.get("instance") == "brightness":
                 value = state.get("value")
-                if isinstance(value, (int, float)):
-                    return max(1, min(100, int(round(float(value)))))
+                if isinstance(value, (int, float)): return max(1, min(100, int(round(float(value)))))
         return 100
 
     @property
+    def current_option(self) -> str | None:
+        self._update_options()
+        cap = self._color_cap() or {}
+        state = cap.get("state") or {}
+        instance, value = state.get("instance"), state.get("value")
+        if instance == "scene" and isinstance(value, str):
+            name = SCENE_NAMES.get(value)
+            if name in self.options: return name
+            for item in self._scenes():
+                if str(item.get("id")) == value: return str(item.get("name") or value)
+        internal = state.get("internal_state") or {}
+        color_id = internal.get("color_id")
+        if isinstance(color_id, str):
+            name = SCENE_NAMES.get(color_id)
+            if name in self.options: return name
+            for item in self._scenes():
+                if str(item.get("id")) == color_id: return str(item.get("name") or color_id)
+        if instance == "temperature_k" and isinstance(value, (int, float)):
+            candidates = [(n, d["value"]) for n, d in PRESETS.items() if d["kind"] == "temperature" and n in self.options]
+            if candidates:
+                name, temp = min(candidates, key=lambda x: abs(x[1] - float(value)))
+                if abs(temp - float(value)) <= 150: return name
+        return None
+
+    async def async_select_option(self, option: str) -> None:
+        self._update_options()
+        color_cap = self._color_cap()
+        if not color_cap or option not in self.options: return
+        preset = PRESETS.get(option)
+        if preset and preset["kind"] == "temperature":
+            action = temperature_action(preset["value"], *self._temperature_range())
+        elif preset:
+            p = preset["value"]
+            action = hsv_action(p["h"], p["s"], self._brightness_value())
+        else:
+            scene_id = self._scene_by_name(option)
+            if not scene_id: return
+            action = scene_action(scene_id)
+        actions = [on_off(True)] if any(c.get("type") == CAP_ON_OFF for c in self.current.get("capabilities", [])) else []
+        actions.append(action)
+        await self.coordinator.async_action(self.device_id, actions)
+
+    @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {
-            "yandex_device_id": self.device_id,
-            "preset_count": len(PRESETS),
-            "scene_count": len(self._scenes(self.current)),
-        }
+        return {"yandex_device_id": self.device_id, "preset_count": len(PRESETS), "scene_count": len(self._scenes())}
 
 
 async def async_setup_entry(hass, entry, async_add_entities) -> None:
