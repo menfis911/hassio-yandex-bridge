@@ -57,8 +57,8 @@ assert scene_payload["state"]["instance"] != "color_scene"
 group_source = GROUP_PATH.read_text(encoding="utf-8")
 light_source = LIGHT_PATH.read_text(encoding="utf-8")
 assert "class YandexLightsGroup" in group_source
-assert "light", "turn_on" in group_source
-assert "light", "turn_off" in group_source
+assert '"light", "turn_on"' in group_source
+assert '"light", "turn_off"' in group_source
 assert "_yandex_lights_group" in group_source
 assert "YandexLightsGroup" in light_source
 assert "if len(lights) >= 2" in light_source
