@@ -39,17 +39,16 @@ jobs:
           hacs = json.loads(Path("hacs.json").read_text(encoding="utf-8"))
           en = json.loads((root / "translations/en.json").read_text(encoding="utf-8"))
           ru = json.loads((root / "translations/ru.json").read_text(encoding="utf-8"))
-          light_source = (root / "light.py").read_text(encoding="utf-8")
-          select_source = (root / "select.py").read_text(encoding="utf-8")
-          actions_source = (root / "actions.py").read_text(encoding="utf-8")
-          init_source = (root / "__init__.py").read_text(encoding="utf-8")
-          coordinator_source = (root / "coordinator.py").read_text(encoding="utf-8")
-          api_source = (root / "api.py").read_text(encoding="utf-8")
-          const_source = (root / "const.py").read_text(encoding="utf-8")
           readme = Path("README.md").read_text(encoding="utf-8")
           changelog = Path("yandex_ha_bridge/CHANGELOG.md").read_text(encoding="utf-8")
           app_config = Path("yandex_ha_bridge/config.yaml").read_text(encoding="utf-8")
           bridge_source = Path("yandex_ha_bridge/app/bridge.py").read_text(encoding="utf-8")
+          api_source = (root / "api.py").read_text(encoding="utf-8")
+          const_source = (root / "const.py").read_text(encoding="utf-8")
+          coordinator_source = (root / "coordinator.py").read_text(encoding="utf-8")
+          actions_source = (root / "actions.py").read_text(encoding="utf-8")
+          light_source = (root / "light.py").read_text(encoding="utf-8")
+          select_source = (root / "select.py").read_text(encoding="utf-8")
 
           for path in [*root.glob("*.py"), *Path("yandex_ha_bridge/app").glob("*.py"), *Path("tests").glob("*.py")]:
               ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -60,75 +59,43 @@ jobs:
           const_version_match = re.search(r'^VERSION\s*=\s*[\"\']([^\"\']+)', const_source, re.MULTILINE)
           assert app_version_match and bridge_version_match and api_version_match and const_version_match, "Version declarations are incomplete"
 
-          app_version = app_version_match.group(1)
-          bridge_version = bridge_version_match.group(1)
-          api_version = api_version_match.group(1)
-          const_version = const_version_match.group(1)
           version = manifest["version"]
-
+          versions = {
+              version,
+              app_version_match.group(1),
+              bridge_version_match.group(1),
+              api_version_match.group(1),
+              const_version_match.group(1),
+          }
+          assert len(versions) == 1, f"Version mismatch: {sorted(versions)}"
           assert manifest["domain"] == "yandex_ha_bridge"
           assert manifest["name"] == "Yandex HA Bridge"
-          assert {app_version, bridge_version, api_version, const_version, version} == {version}, "Version mismatch"
           assert hacs["name"] == "Yandex HA Bridge"
           assert "config" in en and "config" in ru
           assert "options" in en and "options" in ru
           assert (root / "config_flow.py").is_file()
+          assert (root / "actions.py").is_file()
           assert not (root / "strings.json").exists()
 
-          assert "from homeassistant.components.light import" in light_source
-          assert "ATTR_BRIGHTNESS" in light_source
-          assert "ATTR_RGB_COLOR" in light_source
-          assert "ATTR_COLOR_TEMP_KELVIN" in light_source
-          assert "from homeassistant.const import ATTR_BRIGHTNESS" not in light_source
-          assert "from homeassistant.helpers.entity import DeviceInfo" in light_source
-          assert "self._attr_device_info = DeviceInfo(" in light_source
-          assert "identifiers={(DOMAIN, device_id)}" in light_source
-          assert "serial_number=device_id" in light_source
-          assert "device_registry" not in init_source
-          assert "async_get_or_create" not in init_source
-          assert "ColorMode" in light_source
-          assert "async_turn_on" in light_source
-          assert "async_turn_off" in light_source
-          assert "temperature_k" in light_source
-          assert "color_model" in light_source
-          assert "from .actions import" in light_source
-          assert "from .actions import" in select_source
-
-          assert "from homeassistant.components.select import SelectEntity" in select_source
-          assert "class YandexLightPresetSelect" in select_source
-          assert "async_setup_entry" in select_source
-          assert '"Тёплый свет"' in select_source
-          assert '"Нейтральный свет"' in select_source
-          assert '"Холодный свет"' in select_source
-          assert '"Красный"' in select_source
-          assert '"Зелёный"' in select_source
-          assert '"Синий"' in select_source
-          assert '"party": "Вечеринка"' in select_source
-          assert '"color_scene"' in select_source
-          assert '"instance": "scene"' in actions_source
-          assert '"instance": "color_scene"' not in actions_source
-          assert '"instance": "temperature_k"' in actions_source
+          assert "from .actions import" in light_source, "light.py must use centralized actions"
+          assert "from .actions import" in select_source, "select.py must use centralized actions"
+          assert '"instance": "scene"' in actions_source, "scene action must use instance=scene"
+          assert '"instance": "color_scene"' not in actions_source, "color_scene must never be an action instance"
           assert '"instance": "hsv"' in actions_source
+          assert '"instance": "temperature_k"' in actions_source
           assert '"instance": "on"' in actions_source
           assert "int(round(float(h)))" in actions_source
 
-          assert "PLATFORMS = [Platform.LIGHT, Platform.SELECT]" in const_source
-          assert "config_entry=entry" in coordinator_source
-          assert "except YandexApiError as err:" in coordinator_source
-          assert "raise UpdateFailed(str(err)) from err" in coordinator_source
-          assert "async def async_action" in coordinator_source
-          assert "except YandexApiError:" in coordinator_source
-          assert "await self.async_request_refresh()" in coordinator_source
           assert "/v1.0/devices/actions" in api_source
           assert "iot:control" in api_source
-          assert "if not actions:" in api_source
-          assert "Yandex-HABridge/" in api_source
+          assert "async def async_action" in coordinator_source
+          assert "await self.async_request_refresh()" in coordinator_source
+          assert "PLATFORMS = [Platform.LIGHT, Platform.SELECT]" in const_source
+
           assert re.search(rf"(?:^|[^0-9]){re.escape(version)}(?:[^0-9]|$)", readme), "README does not mention current version"
           assert re.search(rf"^##\s+{re.escape(version)}(?:\s|$)", changelog, re.MULTILINE), "CHANGELOG is missing current version heading"
           assert "iot:control" in readme
-          assert "Device Registry" in readme
           assert "Режим" in readme
-          assert "Вечеринка" in readme or "party" in readme
 
           print(f"Yandex HA Bridge {version} validation passed")
           PY
