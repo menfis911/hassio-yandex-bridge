@@ -26,7 +26,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m compileall -q custom_components/yandex_ha_bridge yandex_ha_bridge/app
+          python -m compileall -q custom_components/yandex_ha_bridge yandex_ha_bridge/app tests
+          python tests/test_actions.py
           python - <<'PY'
           import ast
           import json
@@ -50,7 +51,7 @@ jobs:
           app_config = Path("yandex_ha_bridge/config.yaml").read_text(encoding="utf-8")
           bridge_source = Path("yandex_ha_bridge/app/bridge.py").read_text(encoding="utf-8")
 
-          for path in [*root.glob("*.py"), *Path("yandex_ha_bridge/app").glob("*.py")]:
+          for path in [*root.glob("*.py"), *Path("yandex_ha_bridge/app").glob("*.py"), *Path("tests").glob("*.py")]:
               ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
           app_version_match = re.search(r"^version:\s*([^\s]+)", app_config, re.MULTILINE)
@@ -90,6 +91,8 @@ jobs:
           assert "async_turn_off" in light_source
           assert "temperature_k" in light_source
           assert "color_model" in light_source
+          assert "from .actions import" in light_source
+          assert "from .actions import" in select_source
 
           assert "from homeassistant.components.select import SelectEntity" in select_source
           assert "class YandexLightPresetSelect" in select_source
